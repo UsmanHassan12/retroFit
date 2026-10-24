@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens — extracted from the Retrofit Portal Figma file.
+ * Tailwind v4 reads these and generates utilities (bg-navy, text-muted, shadow-card, …).
+ */
+@theme {
+  /* Brand */
+  --color-brand-50: #eaf8ef;
+  --color-brand-100: #c9f2d6;
+  --color-brand-200: #9ee8b4;
+  --color-brand: #12b14e;
+  --color-brand-600: #0f9a44;
+  --color-brand-700: #006e2d;
+  --color-ocean: #003366;
+  --color-teal: #08605f;
+
+  /* Neutrals */
+  --color-navy: #0b1c30;
+  --color-navy-800: #1e293b;
+  --color-ink: #151419;
+  --color-muted: #45464d;
+  --color-subtle: #59585c;
+  --color-faint: #8a8c9c;
+  --color-line: #c4c4c4;
+  --color-line-soft: #e6e6e8;
+  --color-canvas: #f7f7f7;
+  --color-surface: #ffffff;
+
+  /* Status */
+  --color-danger: #ba1a1a;
+  --color-warning: #e3b008;
+  --color-warning-soft: #fdf4d3;
+
+  /* Elevation */
+  --shadow-card: 0 4px 4.8px rgb(11 28 48 / 0.25);
+  --shadow-soft: 0 0.5px 9.5px rgb(11 28 48 / 0.11);
+  --shadow-float: 0 6px 16px -6px rgb(11 28 48 / 0.21);
+
+  /* Motion */
+  --animate-marquee: marquee 30s linear infinite;
+  --animate-spin-slow: spin 18s linear infinite;
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-nunito), var(--font-inter), ui-sans-serif, sans-serif;
+  --font-accent: var(--font-exo), var(--font-inter), ui-sans-serif, sans-serif;
+}
+
+/* Primary call-to-action gradient used across the product (navy → teal). */
+@utility bg-brand-gradient {
+  background-image: linear-gradient(90deg, var(--color-ocean) 0%, var(--color-teal) 100%);
+}
+
+/* Dashed "blueprint" rules used on the marketing pages. */
+@utility border-blueprint {
+  border-color: rgb(196 196 196 / 0.8);
+  border-style: dashed;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-navy;
+  }
+
+  ::selection {
+    @apply bg-brand/20;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
