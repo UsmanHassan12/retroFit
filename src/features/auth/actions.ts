@@ -1,69 +1,104 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import type { z } from "zod";
+import { z } from "zod";
 
-import { createSession, deleteSession } from "@/lib/auth/session";
-import { homeForRole, type Role } from "@/lib/auth/types";
+import { homeForRole } from "@/lib/auth/types";
+import { AppError } from "@/server/errors";
+import { fieldErrors, messageFor } from "@/server/http";
+import * as auth from "@/server/services/auth";
 
-import { loginSchema, signupSchema, type AuthFormState } from "./schemas";
-
-/** Pull the first message per field out of a zod error. */
-function fieldErrors(error: z.ZodError): AuthFormState["fieldErrors"] {
-  const result: Record<string, string> = {};
-  for (const issue of error.issues) {
-    const key = String(issue.path[0] ?? "");
-    if (key && !result[key]) result[key] = issue.message;
-  }
-  return result;
-}
+import type { AuthFormState } from "./schemas";
 
 /** Only allow same-site relative redirects after login. */
-function safeNext(next: string | undefined, fallback: string) {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : fallback;
+function safeNext(next: FormDataEntryValue | null, fallback: string) {
+  const value = typeof next === "string" ? next : "";
+  return value.startsWith("/") && !value.startsWith("//") ? value : fallback;
 }
 
-/**
- * DEMO AUTH — replace with your identity provider / users API.
- * Any email + password signs in. Emails starting with "admin" get the admin console.
- */
-function demoRoleFor(email: string): Role {
-  return email.startsWith("admin") ? "admin" : "client";
-}
+const text = (formData: FormData, key: string) => String(formData.get(key) ?? "");
 
-function nameFromEmail(email: string) {
-  const local = email.split("@")[0] ?? "there";
-  return local
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part[0]!.toUpperCase() + part.slice(1))
-    .join(" ");
+/** Turn a service error into form state: per-field messages for validation, a banner otherwise. */
+function toState(error: unknown, values: AuthFormState["values"]): AuthFormState {
+  if (error instanceof z.ZodError) return { fieldErrors: fieldErrors(error), values };
+  if (error instanceof AppError && error.details && typeof error.details === "object") {
+    return { fieldErrors: error.details as AuthFormState["fieldErrors"], values };
+  }
+  return { message: messageFor(error), values };
 }
 
 export async function login(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const parsed = loginSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) {
-    return { fieldErrors: fieldErrors(parsed.error), values: { email: String(formData.get("email") ?? "") } };
+  const email = text(formData, "email");
+  let role: string;
+  try {
+    ({ role } = await auth.login({ email, password: text(formData, "password") }));
+  } catch (error) {
+    return toState(error, { email });
   }
-
-  const { email, next } = parsed.data;
-  const role = demoRoleFor(email);
-  await createSession({ userId: email, email, name: nameFromEmail(email), role });
-  redirect(safeNext(next, homeForRole(role)));
+  redirect(safeNext(formData.get("next"), homeForRole(role)));
 }
 
 export async function signup(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const parsed = signupSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) {
-    return { fieldErrors: fieldErrors(parsed.error), values: { email: String(formData.get("email") ?? "") } };
+  const values = { email: text(formData, "email"), firstName: text(formData, "firstName"), lastName: text(formData, "lastName") };
+  try {
+    await auth.register({
+      ...values,
+      password: text(formData, "password"),
+      confirmPassword: text(formData, "confirmPassword"),
+    });
+  } catch (error) {
+    return toState(error, values);
   }
-
-  const { email } = parsed.data;
-  await createSession({ userId: email, email, name: nameFromEmail(email), role: "client" });
-  redirect("/dashboard");
+  redirect(safeNext(formData.get("next"), "/dashboard"));
 }
 
 export async function logout() {
-  await deleteSession();
+  await auth.logout();
   redirect("/login");
+}
+
+export async function requestPasswordReset(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const email = text(formData, "email");
+  try {
+    await auth.forgotPassword({ email });
+  } catch (error) {
+    return toState(error, { email });
+  }
+  return { notice: "If an account exists for that email, we’ve sent a link to reset your password. It expires in 1 hour.", values: { email } };
+}
+
+export async function resetPassword(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  let role: string;
+  try {
+    ({ role } = await auth.resetPassword({
+      token: text(formData, "token"),
+      password: text(formData, "password"),
+      confirmPassword: text(formData, "confirmPassword"),
+    }));
+  } catch (error) {
+    return toState(error, {});
+  }
+  redirect(homeForRole(role));
+}
+
+export async function acceptInvite(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const values = { firstName: text(formData, "firstName"), lastName: text(formData, "lastName") };
+  let role: string;
+  try {
+    ({ role } = await auth.acceptInvite({
+      ...values,
+      token: text(formData, "token"),
+      password: text(formData, "password"),
+      confirmPassword: text(formData, "confirmPassword"),
+    }));
+  } catch (error) {
+    return toState(error, values);
+  }
+  redirect(homeForRole(role));
+}
+
+/** "Return to admin" from the impersonation banner. */
+export async function stopImpersonating() {
+  await auth.stopImpersonation();
+  redirect("/admin/users");
 }

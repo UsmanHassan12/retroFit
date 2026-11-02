@@ -12,16 +12,18 @@ export const metadata: Metadata = {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireStaff();
+  // Services, users and settings are admin-only; other staff see projects.
+  const nav = session.role === "admin" ? adminNav : adminNav.filter((item) => item.href === "/admin" || item.href === "/admin/projects");
 
   return (
     <DashboardFrame
-      nav={adminNav}
+      nav={nav}
       topbar={
         <Topbar
-          user={{ name: session.name, avatar: "/images/avatars/sarah.webp" }}
+          user={{ name: session.name, avatar: session.avatarUrl ?? undefined }}
           searchAction="/admin/projects"
           searchPlaceholder="Search projects, clients, services..."
-          profileHref="/admin/settings"
+          profileHref={session.role === "admin" ? "/admin/settings" : "/admin"}
         />
       }
     >

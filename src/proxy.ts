@@ -1,32 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { SESSION_COOKIE, homeForRole, isStaff, type Session } from "@/lib/auth/types";
+import { SESSION_COOKIE, homeForRole, isStaff } from "@/lib/auth/types";
+import { verifyJwt } from "@/server/auth/jwt";
 
 /**
- * Next.js 16 proxy (formerly middleware).
- * Optimistic routing only: it reads the session claims without verifying the signature.
- * Protected layouts re-check with the signed session via lib/auth/guards.ts.
+ * Next.js 16 proxy (formerly middleware). Verifies the session JWT's signature and expiry and
+ * redirects early. It does not hit the database, so revoked sessions are caught a moment later
+ * by the page guards (lib/auth/guards.ts) and API helpers (server/auth/session.ts).
  */
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/checkout"];
 const AUTH_PAGES = ["/login", "/signup"];
 
-function readClaims(token: string | undefined): Pick<Session, "role" | "expiresAt"> | null {
-  if (!token) return null;
-  const [payload] = token.split(".");
-  if (!payload) return null;
-  try {
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    const claims = JSON.parse(json) as Session;
-    return claims.expiresAt > Date.now() ? claims : null;
-  } catch {
-    return null;
-  }
-}
-
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  const claims = readClaims(request.cookies.get(SESSION_COOKIE)?.value);
+  const secret = process.env.AUTH_SECRET ?? process.env.SESSION_SECRET ?? "";
+  const claims = secret ? await verifyJwt(request.cookies.get(SESSION_COOKIE)?.value, secret) : null;
 
   const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   if (isProtected && !claims) {

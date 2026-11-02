@@ -6,8 +6,8 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 
-import { placeOrder, type PlaceOrderState } from "../actions";
-import { calculateTotals, discountRateFor } from "../lib/pricing";
+import { applyDiscountCode, placeOrder, type PlaceOrderState } from "../actions";
+import { calculateTotals } from "../lib/pricing";
 
 type ReceiptCardProps = {
   slug: string;
@@ -16,27 +16,44 @@ type ReceiptCardProps = {
   tierPrice: number;
   addOnIds: string[];
   addOnPrices: number[];
+  /** Subscription discount (Priority plan: 15). Codes and plan discounts never stack. */
+  planDiscountPercent?: number;
+  notice?: string;
 };
 
-export function ReceiptCard({ slug, tierId, tierName, tierPrice, addOnIds, addOnPrices }: ReceiptCardProps) {
+export function ReceiptCard({ slug, tierId, tierName, tierPrice, addOnIds, addOnPrices, planDiscountPercent = 0, notice }: ReceiptCardProps) {
   const [code, setCode] = useState("");
-  const [appliedCode, setAppliedCode] = useState<string | null>(null);
+  const [applied, setApplied] = useState<{ code: string; percentOff: number } | null>(null);
+  const [checking, setChecking] = useState(false);
   const [codeMessage, setCodeMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [state, formAction, pending] = useActionState<PlaceOrderState, FormData>(placeOrder, {});
 
-  const rate = discountRateFor(appliedCode);
-  // Mirrors the server calculation for display; the server action recomputes before charging.
-  const totals = calculateTotals({ base: tierPrice, addOns: addOnPrices }, rate);
+  const codePercent = applied?.percentOff ?? 0;
+  const percent = Math.max(codePercent, planDiscountPercent);
+  const discountLabel = percent === 0 ? null : codePercent >= planDiscountPercent ? `Discount (${applied?.code})` : `Priority plan (${planDiscountPercent}%)`;
+  // Mirrors the server calculation for display; the server recomputes before charging.
+  const totals = calculateTotals({ base: tierPrice, addOns: addOnPrices }, percent / 100);
 
-  function applyCode() {
+  async function applyCode() {
     const value = code.trim().toUpperCase();
-    if (!value) return;
-    if (discountRateFor(value) > 0) {
-      setAppliedCode(value);
-      setCodeMessage({ ok: true, text: `Code ${value} applied — ${Math.round(discountRateFor(value) * 100)}% off.` });
-    } else {
-      setAppliedCode(null);
-      setCodeMessage({ ok: false, text: "That code isn’t valid." });
+    if (!value || checking) return;
+    setChecking(true);
+    try {
+      const result = await applyDiscountCode(value);
+      if (!result) {
+        setApplied(null);
+        setCodeMessage({ ok: false, text: "That code isn’t valid or has expired." });
+      } else if (result.percentOff <= planDiscountPercent) {
+        setApplied(null);
+        setCodeMessage({ ok: false, text: `Your Priority plan already gives you ${planDiscountPercent}% off, which is the better deal.` });
+      } else {
+        setApplied(result);
+        setCodeMessage({ ok: true, text: `Code ${result.code} applied — ${result.percentOff}% off.` });
+      }
+    } catch {
+      setCodeMessage({ ok: false, text: "We couldn’t check that code. Please try again." });
+    } finally {
+      setChecking(false);
     }
   }
 
@@ -53,12 +70,18 @@ export function ReceiptCard({ slug, tierId, tierName, tierPrice, addOnIds, addOn
         <input type="hidden" name="slug" value={slug} />
         <input type="hidden" name="tier" value={tierId} />
         <input type="hidden" name="addons" value={addOnIds.join(",")} />
-        {appliedCode ? <input type="hidden" name="discountCode" value={appliedCode} /> : null}
+        {applied ? <input type="hidden" name="discountCode" value={applied.code} /> : null}
+
+        {notice ? (
+          <p role="status" className="mb-6 rounded-lg bg-warning-soft px-4 py-3 text-sm text-[#7a5500]">
+            {notice}
+          </p>
+        ) : null}
 
         <dl className="grid gap-5 text-base">
           <Row label={`Base Price (${tierName})`} value={formatCurrency(totals.base)} />
           <Row label="Selected Add-ons" value={formatCurrency(totals.addOns)} />
-          {totals.discount > 0 ? <Row label={`Discount (${appliedCode})`} value={`−${formatCurrency(totals.discount)}`} accent /> : null}
+          {totals.discount > 0 && discountLabel ? <Row label={discountLabel} value={`−${formatCurrency(totals.discount)}`} accent /> : null}
           <Row label="VAT (20%)" value={formatCurrency(totals.vat)} />
         </dl>
 
@@ -82,7 +105,8 @@ export function ReceiptCard({ slug, tierId, tierName, tierPrice, addOnIds, addOn
             aria-describedby="discount-message"
             className="h-[49px] flex-1 rounded-lg border border-line-soft px-4 text-sm uppercase shadow-[0_2px_4px_rgb(11_28_48/0.12)] placeholder:text-line focus-visible:border-brand focus-visible:ring-4 focus-visible:ring-brand/15 focus-visible:outline-none"
           />
-          <Button variant="brand" className="h-[49px] w-[117px] rounded-lg shadow-none" onClick={applyCode}>
+          <Button variant="brand" className="h-[49px] w-[117px] rounded-lg shadow-none" onClick={applyCode} disabled={checking}>
+            {checking ? <Loader2 className="animate-spin" aria-hidden /> : null}
             Apply
           </Button>
         </div>
@@ -111,7 +135,7 @@ export function ReceiptCard({ slug, tierId, tierName, tierPrice, addOnIds, addOn
           {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
           {pending ? "Processing…" : "Complete Purchase"}
         </Button>
-        <p className="mt-6 text-center text-xs text-muted">Secure payment by Stripe or PayPal. A VAT invoice is emailed on purchase.</p>
+        <p className="mt-6 text-center text-xs text-muted">Secure payment by Stripe. A confirmation with your VAT breakdown is emailed on purchase.</p>
       </form>
     </section>
   );

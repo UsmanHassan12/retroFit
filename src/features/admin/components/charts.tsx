@@ -5,15 +5,24 @@ import { formatCompactCurrency } from "@/lib/format";
  * Each has an accessible text alternative via <title>/<desc> and an sr-only data table.
  */
 
-export function BarChart({ data, max = 10 }: { data: { name: string; value: number }[]; max?: number }) {
+/** Round a maximum up to a "nice" axis: 5 equal steps of 1, 2 or 5 × 10ⁿ. */
+function niceAxis(peak: number, minimum = 5) {
+  const raw = Math.max(peak, minimum) / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  const normalised = raw / magnitude;
+  const step = (normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 5 ? 5 : 10) * magnitude;
+  return { max: step * 5, ticks: [0, 1, 2, 3, 4, 5].map((index) => index * step) };
+}
+
+export function BarChart({ data }: { data: { name: string; value: number }[] }) {
   const width = 470;
   const height = 210;
   const left = 22;
   const bottom = 22;
   const plotH = height - bottom;
   const slot = (width - left) / data.length;
-  const peak = Math.max(...data.map((item) => item.value));
-  const ticks = [0, 2, 4, 6, 8, 10];
+  const peak = Math.max(0, ...data.map((item) => item.value));
+  const { max, ticks } = niceAxis(peak);
 
   return (
     <figure>
@@ -33,7 +42,7 @@ export function BarChart({ data, max = 10 }: { data: { name: string; value: numb
         {data.map((item, index) => {
           const h = (item.value / max) * (plotH - 8);
           const x = left + index * slot + 4;
-          const isPeak = item.value === peak;
+          const isPeak = peak > 0 && item.value === peak;
           return (
             <g key={item.name}>
               <rect
@@ -65,6 +74,9 @@ export function DonutChart({
   total: number;
 }) {
   const radius = 54;
+  if (total === 0) {
+    return <p className="py-16 text-center text-sm text-muted">No projects yet.</p>;
+  }
   const stroke = 30;
   const circumference = 2 * Math.PI * radius;
   // Start offset of each arc = sum of the arcs before it.
@@ -122,13 +134,12 @@ export function LineChart({
   points,
   months,
   highlightIndex,
-  max = 10000,
 }: {
   points: number[];
   months: string[];
   highlightIndex?: number;
-  max?: number;
 }) {
+  const { max, ticks } = niceAxis(Math.max(0, ...points), 1000);
   const width = 1100;
   const height = 260;
   const left = 44;
@@ -140,13 +151,12 @@ export function LineChart({
   const x = (index: number) => left + (index / (points.length - 1)) * plotW;
   const y = (value: number) => top + plotH - (value / max) * plotH;
   const path = points.map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
-  const ticks = [0, 2000, 4000, 6000, 8000, 10000];
   const highlight = highlightIndex !== undefined ? points[highlightIndex] : undefined;
 
   return (
     <figure>
       <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-labelledby="revenue-title">
-        <title id="revenue-title">Revenue trend, January to June</title>
+        <title id="revenue-title">{`Revenue trend, ${months[0]} to ${months.at(-1)}`}</title>
         <defs>
           <linearGradient id="revenue-highlight" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="var(--color-brand)" stopOpacity="0" />
@@ -157,7 +167,7 @@ export function LineChart({
           <g key={tick}>
             <line x1={left} x2={width - right} y1={y(tick)} y2={y(tick)} stroke="#eceef0" />
             <text x={0} y={y(tick) + 4} className="fill-navy text-[11px] font-medium">
-              {tick === 0 ? "0" : `£${tick / 1000}K`}
+              {tick === 0 ? "0" : formatCompactCurrency(tick)}
             </text>
           </g>
         ))}

@@ -1,16 +1,17 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/input";
+import { Field, Input, Select, inputStyles } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 
 import { inviteStaff, type FormState } from "../actions";
 
-export function InviteForm() {
+export function InviteForm({ projects }: { projects: { id: string; label: string }[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(inviteStaff, {});
+  const [assignSpecific, setAssignSpecific] = useState(false);
   const errors = state.errors ?? {};
 
   return (
@@ -43,13 +44,27 @@ export function InviteForm() {
             </div>
             <div className="flex items-center justify-between text-muted">
               <span>Assign to specific projects</span>
-              <Switch label="Assign to specific projects" name="assignSpecific" />
+              <Switch label="Assign to specific projects" name="assignSpecific" onCheckedChange={setAssignSpecific} />
             </div>
+            {assignSpecific ? (
+              <div>
+                <label htmlFor="invite-projects" className="text-xs text-navy">
+                  Projects (hold Ctrl / ⌘ to choose several)
+                </label>
+                <select id="invite-projects" name="projectIds" multiple className={`${inputStyles} mt-2 h-40 py-2`}>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
           </div>
         </fieldset>
       </div>
 
-      <p role="status" className={state.message ? "mt-4 text-center text-sm text-brand-700" : "sr-only"}>
+      <p role="status" className={state.message ? `mt-4 text-center text-sm ${state.ok ? "text-brand-700" : "text-danger"}` : "sr-only"}>
         {state.message}
       </p>
 

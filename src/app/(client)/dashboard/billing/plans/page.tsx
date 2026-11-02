@@ -2,20 +2,23 @@ import { CircleCheck, CircleX } from "lucide-react";
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Button } from "@/components/ui/button";
-import { PLANS, SUBSCRIPTION } from "@/features/billing/data";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { BillingButton } from "@/features/billing/components/billing-button";
+import { getPlans, getSubscription } from "@/features/billing/queries";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Plans" };
 
-export default function PlansPage() {
+export default async function PlansPage() {
+  const [plans, subscription] = await Promise.all([getPlans(), getSubscription()]);
+
   return (
     <div className="mx-auto max-w-[1120px]">
       <PageHeader title="Choose Your Plan" description="Scalable solutions for teams of all sizes." />
 
       <ul className="mt-12 grid items-center gap-6 md:grid-cols-3">
-        {PLANS.map((plan) => {
-          const current = plan.id === SUBSCRIPTION.planId;
+        {plans.map((plan) => {
+          const current = plan.id === subscription.planId;
           const dark = plan.popular;
           return (
             <li
@@ -54,15 +57,25 @@ export default function PlansPage() {
                   </li>
                 ))}
               </ul>
-              <Button
-                variant={dark ? "outline" : "primary"}
-                size="lg"
-                fullWidth
-                disabled={current}
-                className="mt-10 text-base font-semibold"
-              >
-                {current ? "Current Plan" : plan.id === "enterprise" ? "Contact Sales" : plan.price === 0 ? "Downgrade" : "Upgrade Now"}
-              </Button>
+              <div className="mt-10 flex flex-wrap">
+                {current ? (
+                  <Button variant={dark ? "outline" : "primary"} size="lg" fullWidth disabled className="text-base font-semibold">
+                    Current Plan
+                  </Button>
+                ) : plan.id === "enterprise" ? (
+                  <ButtonLink href="mailto:sales@retrofitportal.co.uk?subject=Enterprise%20plan" variant={dark ? "outline" : "primary"} size="lg" fullWidth className="text-base font-semibold">
+                    Contact Sales
+                  </ButtonLink>
+                ) : plan.id === "free" ? (
+                  <BillingButton intent="portal" variant={dark ? "outline" : "primary"} size="lg" fullWidth className="text-base font-semibold">
+                    Downgrade
+                  </BillingButton>
+                ) : (
+                  <BillingButton intent="subscribe" variant={dark ? "outline" : "primary"} size="lg" fullWidth className="text-base font-semibold">
+                    Upgrade Now
+                  </BillingButton>
+                )}
+              </div>
             </li>
           );
         })}

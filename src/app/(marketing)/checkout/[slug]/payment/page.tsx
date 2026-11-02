@@ -8,6 +8,7 @@ import { resolveSelection, selectionQuery } from "@/features/checkout/lib/order"
 import { getServiceBySlug } from "@/features/services/queries";
 import { requireSession } from "@/lib/auth/guards";
 import { firstParam } from "@/lib/utils";
+import { PRIORITY_PLAN_DISCOUNT_PERCENT } from "@/server/domain";
 
 export const metadata: Metadata = { title: "Complete your order", robots: { index: false } };
 
@@ -18,7 +19,7 @@ type Props = {
 
 export default async function CompleteOrderPage({ params, searchParams }: Props) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  await requireSession(`/checkout/${slug}/payment`);
+  const session = await requireSession(`/checkout/${slug}/payment`);
 
   const service = await getServiceBySlug(slug);
   if (!service) notFound();
@@ -44,6 +45,8 @@ export default async function CompleteOrderPage({ params, searchParams }: Props)
           tierPrice={selection.tier.price}
           addOnIds={selection.addOns.map((addOn) => addOn.id)}
           addOnPrices={selection.addOns.map((addOn) => addOn.price)}
+          planDiscountPercent={session.plan === "free" ? 0 : PRIORITY_PLAN_DISCOUNT_PERCENT}
+          notice={firstParam(query.cancelled) ? "Payment was cancelled. Your card hasn’t been charged — you can try again below." : undefined}
         />
       </div>
     </BlueprintSection>

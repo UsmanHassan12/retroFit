@@ -1,0 +1,602 @@
+// Retrofit Portal — database schema (PostgreSQL 16, Prisma 6).
+// Conventions: ids are cuid strings, money is integer pence (`*Pence`), timestamps are UTC.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  CLIENT
+  ASSESSOR
+  DESIGNER
+  COORDINATOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Plan {
+  FREE
+  PRIORITY
+  ENTERPRISE
+}
+
+enum ServiceCategory {
+  ASSESSMENT
+  DESIGN
+  COORDINATION
+  FULL_PACKAGE
+  FUNDING
+}
+
+enum Scheme {
+  ECO4
+  GBIS
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+enum DiscountSource {
+  NONE
+  CODE
+  PLAN
+}
+
+/// Workflow phase shown in the client timeline and the admin directory.
+enum ProjectPhase {
+  PURCHASED
+  ASSESSMENT
+  SURVEY
+  DESIGN
+  COORDINATION
+  INSTALLATION
+  QA
+  COMPLETED
+}
+
+/// Health of the project ("Projects by Status" donut).
+enum ProjectStatus {
+  ON_TRACK
+  AT_RISK
+  DELAYED
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  QA_REJECT
+}
+
+enum MilestoneStatus {
+  DONE
+  CURRENT
+  UPCOMING
+}
+
+/// Task Board columns.
+enum TaskColumn {
+  BACKLOG
+  AWAITING_CLIENT
+  ASSESSMENT
+  DESIGN
+  COORDINATION
+  QA
+  DONE
+}
+
+enum DocumentStatus {
+  PENDING
+  ACTIVE
+}
+
+enum DeliverableKind {
+  PDF
+  SPREADSHEET
+  REPORT
+}
+
+enum DeliverableStatus {
+  PENDING
+  IN_PROGRESS
+  AVAILABLE
+}
+
+enum InvoiceStatus {
+  PAID
+  OPEN
+  VOID
+}
+
+// ─── Identity ───────────────────────────────────────────────────────────────
+
+model User {
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  passwordHash       String?
+  firstName          String     @default("")
+  lastName           String     @default("")
+  phone              String?
+  avatarUrl          String?
+  role               Role       @default(CLIENT)
+  status             UserStatus @default(ACTIVE)
+  /// Staff only: see every project, not just assigned ones ("View all projects").
+  canViewAllProjects Boolean    @default(false)
+  pushNotifications  Boolean    @default(true)
+
+  plan                 Plan      @default(FREE)
+  planRenewsAt         DateTime?
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  /// Bumped on password change / logout-everywhere; sessions carrying an older value are rejected.
+  sessionVersion   Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  properties          Property[]
+  orders              Order[]
+  clientProjects      Project[]            @relation("ProjectClient")
+  coordinatedProjects Project[]            @relation("ProjectCoordinator")
+  memberships         ProjectMember[]
+  assignedTasks       Task[]               @relation("TaskAssignee")
+  createdTasks        Task[]               @relation("TaskCreator")
+  documents           Document[]
+  messages            Message[]
+  activities          Activity[]
+  invoices            Invoice[]
+  passwordResets      PasswordResetToken[]
+  invitesSent         Invite[]             @relation("InviteSender")
+  auditLogs           AuditLog[]
+
+  @@index([role, status])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Invite {
+  id                 String    @id @default(cuid())
+  email              String
+  role               Role
+  canViewAllProjects Boolean   @default(false)
+  projectIds         String[]
+  tokenHash          String    @unique
+  invitedById        String
+  expiresAt          DateTime
+  acceptedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  invitedBy User @relation("InviteSender", fields: [invitedById], references: [id])
+
+  @@index([email])
+}
+
+// ─── Properties ─────────────────────────────────────────────────────────────
+
+model Property {
+  id           String   @id @default(cuid())
+  ownerId      String
+  line1        String
+  line2        String?
+  city         String
+  postcode     String
+  country      String   @default("United Kingdom")
+  propertyType String
+  epcNumber    String?
+  /// Storage key of the latest uploaded EPC certificate.
+  epcCertificateKey String?
+  verified     Boolean  @default(false)
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  owner    User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  orders   Order[]
+  projects Project[]
+
+  @@index([ownerId])
+}
+
+// ─── Service catalogue ──────────────────────────────────────────────────────
+
+model Service {
+  id          String          @id @default(cuid())
+  slug        String          @unique
+  /// Card title on listings.
+  title       String
+  /// H1 on the detail page.
+  headline    String
+  summary     String
+  intro       String
+  category    ServiceCategory
+  badge       String          @default("PAS 2035")
+  schemes     Scheme[]
+  turnaround  String
+  imageUrl    String
+  gallery     String[]
+  /// { paragraphs: string[], keyAreas: string[] }
+  overview    Json
+  /// "What's Included" checklist.
+  included    String[]
+  /// [{ title, description, icon }]
+  compliance  Json
+  /// [{ title, description, icon }] shown on Review Order.
+  deliverablesInfo Json
+  active      Boolean         @default(true)
+  position    Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  tiers      ServiceTier[]
+  addons     ServiceAddon[]
+  milestones ServiceMilestone[]
+  orders     Order[]
+  projects   Project[]
+
+  @@index([active, category])
+}
+
+model ServiceTier {
+  id           String   @id @default(cuid())
+  serviceId    String
+  /// URL-safe key used by the storefront (?tier=basic).
+  key          String
+  name         String
+  pricePence   Int
+  summary      String
+  deliveryDays Int
+  inclusions   String[]
+  highlights   String[]
+  /// Admin "Deliverables" list for this tier.
+  deliverables String[]
+  position     Int      @default(0)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  orders  Order[]
+
+  @@unique([serviceId, key])
+}
+
+model ServiceAddon {
+  id          String  @id @default(cuid())
+  serviceId   String
+  key         String
+  name        String
+  description String
+  pricePence  Int
+  icon        String  @default("express")
+  active      Boolean @default(true)
+  position    Int     @default(0)
+
+  service Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  orders  OrderAddon[]
+
+  @@unique([serviceId, key])
+}
+
+/// Marketing timeline on the service page ("Day 1: Project Onboarding").
+model ServiceMilestone {
+  id          String @id @default(cuid())
+  serviceId   String
+  title       String
+  description String
+  position    Int    @default(0)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+model DiscountCode {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  percentOff     Int
+  active         Boolean   @default(true)
+  expiresAt      DateTime?
+  maxRedemptions Int?
+  redemptions    Int       @default(0)
+  createdAt      DateTime  @default(now())
+
+  orders Order[]
+}
+
+// ─── Orders & payments ──────────────────────────────────────────────────────
+
+model Order {
+  id         String      @id @default(cuid())
+  reference  String      @unique
+  userId     String
+  serviceId  String
+  tierId     String
+  propertyId String?
+  status     OrderStatus @default(DRAFT)
+
+  // Snapshot so receipts never change if the catalogue does.
+  serviceTitle String
+  tierName     String
+
+  basePence      Int
+  addonsPence    Int
+  discountPence  Int            @default(0)
+  discountSource DiscountSource @default(NONE)
+  vatPence       Int
+  totalPence     Int
+  discountCodeId String?
+
+  stripeSessionId       String?   @unique
+  stripePaymentIntentId String?
+  paidAt                DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  service      Service       @relation(fields: [serviceId], references: [id])
+  tier         ServiceTier   @relation(fields: [tierId], references: [id])
+  property     Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  discountCode DiscountCode? @relation(fields: [discountCodeId], references: [id])
+  addons       OrderAddon[]
+  project      Project?
+
+  @@index([userId, status])
+  @@index([status, paidAt])
+}
+
+model OrderAddon {
+  orderId    String
+  addonId    String
+  name       String
+  pricePence Int
+
+  order Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  addon ServiceAddon @relation(fields: [addonId], references: [id])
+
+  @@id([orderId, addonId])
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  userId          String
+  number          String        @unique
+  description     String
+  amountPence     Int
+  status          InvoiceStatus @default(PAID)
+  stripeInvoiceId String?       @unique
+  pdfUrl          String?
+  issuedAt        DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, issuedAt])
+}
+
+// ─── Projects ───────────────────────────────────────────────────────────────
+
+model Project {
+  id                  String        @id @default(cuid())
+  reference           String        @unique
+  orderId             String?       @unique
+  clientId            String
+  serviceId           String
+  propertyId          String?
+  coordinatorId       String?
+  title               String
+  /// Optional cover photo; falls back to the service image.
+  coverImageUrl       String?
+  phase               ProjectPhase  @default(PURCHASED)
+  phaseDescription    String?
+  phaseNotice         String?
+  status              ProjectStatus @default(ON_TRACK)
+  priority            Priority      @default(MEDIUM)
+  progress            Int           @default(0)
+  compliancePercent   Int           @default(100)
+  fundingSecuredPence Int           @default(0)
+  scheme              Scheme?
+  hasIssues           Boolean       @default(false)
+  criticalIssue       Boolean       @default(false)
+  issueSummary        String?
+  dueDate             DateTime?
+  startedAt           DateTime      @default(now())
+  completedAt         DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  client       User               @relation("ProjectClient", fields: [clientId], references: [id])
+  coordinator  User?              @relation("ProjectCoordinator", fields: [coordinatorId], references: [id], onDelete: SetNull)
+  service      Service            @relation(fields: [serviceId], references: [id])
+  property     Property?          @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  order        Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  members      ProjectMember[]
+  milestones   ProjectMilestone[]
+  tasks        Task[]
+  documents    Document[]
+  messages     Message[]
+  deliverables Deliverable[]
+  activities   Activity[]
+
+  @@index([clientId])
+  @@index([coordinatorId])
+  @@index([status, phase])
+  @@index([dueDate])
+}
+
+model ProjectMember {
+  projectId String
+  userId    String
+  addedAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
+}
+
+model ProjectMilestone {
+  id          String          @id @default(cuid())
+  projectId   String
+  phase       ProjectPhase
+  title       String
+  position    Int
+  status      MilestoneStatus @default(UPCOMING)
+  completedAt DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, phase])
+}
+
+model Task {
+  id              String     @id @default(cuid())
+  projectId       String
+  title           String
+  description     String?
+  column          TaskColumn @default(BACKLOG)
+  position        Int        @default(0)
+  tags            String[]
+  visibleToClient Boolean    @default(false)
+  assigneeId      String?
+  createdById     String?
+  dueDate         DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee  User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy User?   @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, column, position])
+  @@index([assigneeId])
+}
+
+model Document {
+  id           String         @id @default(cuid())
+  projectId    String
+  uploadedById String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String         @unique
+  version      Int            @default(1)
+  category     String?
+  status       DocumentStatus @default(PENDING)
+  createdAt    DateTime       @default(now())
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy   User          @relation(fields: [uploadedById], references: [id])
+  deliverables Deliverable[]
+
+  @@index([projectId, fileName])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  projectId String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id])
+
+  @@index([projectId, createdAt])
+}
+
+model Deliverable {
+  id          String            @id @default(cuid())
+  projectId   String
+  title       String
+  description String
+  kind        DeliverableKind   @default(PDF)
+  status      DeliverableStatus @default(PENDING)
+  documentId  String?
+  estimatedAt DateTime?
+  availableAt DateTime?
+  createdAt   DateTime          @default(now())
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  projectId String
+  actorId   String?
+  type      String
+  message   String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+}
+
+// ─── Platform ───────────────────────────────────────────────────────────────
+
+model EmailTemplate {
+  key         String   @id
+  subject     String
+  html        String
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// Sequential counters for human-readable references (RET-2026-0042, ORD-2026-000123).
+model Counter {
+  key   String @id
+  value Int    @default(0)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+}

@@ -7,7 +7,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 
-import { login, signup } from "../actions";
+import { acceptInvite, login, requestPasswordReset, resetPassword, signup } from "../actions";
 import type { AuthFormState } from "../schemas";
 
 import { PasswordInput } from "./password-input";
@@ -21,6 +21,7 @@ export function LoginForm({ next }: { next?: string }) {
   return (
     <form action={action} noValidate className="grid gap-5">
       {next ? <input type="hidden" name="next" value={next} /> : null}
+      <FormMessage state={state} />
 
       <Field label="Email address" htmlFor="email" error={errors.email} labelClassName="text-base">
         <Input
@@ -65,20 +66,26 @@ export function LoginForm({ next }: { next?: string }) {
         </Link>
       </p>
 
-      <p className="rounded-lg bg-brand-50 px-4 py-3 text-xs text-brand-700">
-        Demo: any email and password signs in. Use an email starting with <strong>admin</strong> to open
-        the admin console.
-      </p>
     </form>
   );
 }
 
-export function SignupForm() {
+export function SignupForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState<AuthFormState, FormData>(signup, {});
   const errors = state.fieldErrors ?? {};
 
   return (
     <form action={action} noValidate className="grid gap-5">
+      {next ? <input type="hidden" name="next" value={next} /> : null}
+      <FormMessage state={state} />
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="First name" htmlFor="firstName" error={errors.firstName} labelClassName="text-base">
+          <Input id="firstName" name="firstName" autoComplete="given-name" placeholder="John" defaultValue={state.values?.firstName} className={bigInput} />
+        </Field>
+        <Field label="Last name" htmlFor="lastName" error={errors.lastName} labelClassName="text-base">
+          <Input id="lastName" name="lastName" autoComplete="family-name" placeholder="Smith" defaultValue={state.values?.lastName} className={bigInput} />
+        </Field>
+      </div>
       <Field label="Email address" htmlFor="email" error={errors.email} labelClassName="text-base">
         <Input
           id="email"
@@ -135,6 +142,122 @@ export function SignupForm() {
           Log in
         </Link>
       </p>
+    </form>
+  );
+}
+
+/** Error banner or success notice for an auth form. */
+function FormMessage({ state }: { state: AuthFormState }) {
+  if (state.message) {
+    return (
+      <p role="alert" className="rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">
+        {state.message}
+      </p>
+    );
+  }
+  if (state.notice) {
+    return (
+      <p role="status" className="rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-700">
+        {state.notice}
+      </p>
+    );
+  }
+  return null;
+}
+
+export function ForgotPasswordForm() {
+  const [state, action, pending] = useActionState<AuthFormState, FormData>(requestPasswordReset, {});
+  const errors = state.fieldErrors ?? {};
+
+  return (
+    <form action={action} noValidate className="grid gap-5">
+      <FormMessage state={state} />
+      <Field label="Email address" htmlFor="email" error={errors.email} labelClassName="text-base">
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="John.smith@gmail.com"
+          defaultValue={state.values?.email}
+          aria-invalid={Boolean(errors.email)}
+          className={bigInput}
+          required
+        />
+      </Field>
+      <Button type="submit" variant="dark" size="xl" fullWidth disabled={pending} className="mt-6 text-lg font-medium">
+        {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+        Send reset link
+      </Button>
+      <Link href="/login" className="mt-4 text-base font-semibold text-navy underline underline-offset-4 hover:text-brand">
+        Back to login
+      </Link>
+    </form>
+  );
+}
+
+/** New password + confirmation, shared by reset and invite acceptance. */
+function NewPasswordFields({ errors }: { errors: NonNullable<AuthFormState["fieldErrors"]> }) {
+  return (
+    <>
+      <Field
+        label="New password"
+        htmlFor="password"
+        error={errors.password}
+        hint="At least 8 characters, including a letter and a number."
+        labelClassName="text-base"
+      >
+        <PasswordInput id="password" name="password" autoComplete="new-password" placeholder="Enter password" aria-invalid={Boolean(errors.password)} required />
+      </Field>
+      <Field label="Confirm password" htmlFor="confirmPassword" error={errors.confirmPassword} labelClassName="text-base">
+        <PasswordInput
+          id="confirmPassword"
+          name="confirmPassword"
+          autoComplete="new-password"
+          placeholder="Enter confirm password"
+          aria-invalid={Boolean(errors.confirmPassword)}
+          required
+        />
+      </Field>
+    </>
+  );
+}
+
+export function ResetPasswordForm({ token }: { token: string }) {
+  const [state, action, pending] = useActionState<AuthFormState, FormData>(resetPassword, {});
+  return (
+    <form action={action} noValidate className="grid gap-5">
+      <input type="hidden" name="token" value={token} />
+      <FormMessage state={state} />
+      <NewPasswordFields errors={state.fieldErrors ?? {}} />
+      <Button type="submit" variant="dark" size="xl" fullWidth disabled={pending} className="mt-6 text-lg font-medium">
+        {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+        Set new password
+      </Button>
+    </form>
+  );
+}
+
+export function AcceptInviteForm({ token }: { token: string }) {
+  const [state, action, pending] = useActionState<AuthFormState, FormData>(acceptInvite, {});
+  const errors = state.fieldErrors ?? {};
+  return (
+    <form action={action} noValidate className="grid gap-5">
+      <input type="hidden" name="token" value={token} />
+      <FormMessage state={state} />
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="First name" htmlFor="firstName" error={errors.firstName} labelClassName="text-base">
+          <Input id="firstName" name="firstName" autoComplete="given-name" defaultValue={state.values?.firstName} className={bigInput} required />
+        </Field>
+        <Field label="Last name" htmlFor="lastName" error={errors.lastName} labelClassName="text-base">
+          <Input id="lastName" name="lastName" autoComplete="family-name" defaultValue={state.values?.lastName} className={bigInput} required />
+        </Field>
+      </div>
+      <NewPasswordFields errors={errors} />
+      <Button type="submit" variant="dark" size="xl" fullWidth disabled={pending} className="mt-6 text-lg font-medium">
+        {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+        Join the team
+      </Button>
     </form>
   );
 }

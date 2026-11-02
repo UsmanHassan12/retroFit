@@ -1,28 +1,11 @@
-import { z } from "zod";
-
-export const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email address.")),
-  password: z.string().min(1, "Enter your password."),
-  next: z.string().optional(),
-});
-
-export const signupSchema = z
-  .object({
-    email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email address.")),
-    password: z
-      .string()
-      .min(8, "Use at least 8 characters.")
-      .regex(/[A-Za-z]/, "Include at least one letter.")
-      .regex(/[0-9]/, "Include at least one number."),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don’t match.",
-    path: ["confirmPassword"],
-  });
+/** Shared state for the auth forms (validation itself lives in src/server/services/auth.ts). */
+export type AuthField = "email" | "password" | "confirmPassword" | "firstName" | "lastName" | "currentPassword";
 
 export type AuthFormState = {
+  /** Form-level error (wrong password, locked account…). */
   message?: string;
-  fieldErrors?: Partial<Record<"email" | "password" | "confirmPassword", string>>;
-  values?: { email?: string };
+  /** Success notice (e.g. "check your email"). */
+  notice?: string;
+  fieldErrors?: Partial<Record<AuthField, string>>;
+  values?: { email?: string; firstName?: string; lastName?: string };
 };

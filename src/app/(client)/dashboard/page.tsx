@@ -15,14 +15,14 @@ import { formatPrice } from "@/lib/format";
 export default async function ClientDashboardPage() {
   const [session, overview] = await Promise.all([requireSession(), getClientOverview()]);
   const { stats, activeProjects } = overview;
-  const firstName = session.name.split(" ")[0] ?? session.name;
+  const firstName = session.firstName;
 
   return (
     <div className="mx-auto max-w-[1120px]">
       <div className="relative">
         <WelcomeBanner
           name={firstName}
-          highlight={`${stats.active} active projects`}
+          highlight={`${stats.active} active project${stats.active === 1 ? "" : "s"}`}
           suffix="that require attention today."
         />
         <div className="relative -mt-24 grid grid-cols-2 gap-4 sm:-mt-[66px] lg:grid-cols-4 lg:gap-6">
@@ -42,6 +42,16 @@ export default async function ClientDashboardPage() {
             View All <ChevronRight className="size-4" aria-hidden />
           </Link>
         </div>
+
+        {activeProjects.length === 0 ? (
+          <div className="mt-6 rounded-2xl bg-white p-8 text-center shadow-card">
+            <p className="text-lg font-medium text-navy">No active projects yet</p>
+            <p className="mt-2 text-muted">Choose a retrofit service to get started. Your project appears here as soon as it’s paid.</p>
+            <ButtonLink href="/services" size="lg" className="mt-6">
+              Browse services
+            </ButtonLink>
+          </div>
+        ) : null}
 
         <ul className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {activeProjects.map((project) => (
@@ -74,6 +84,7 @@ export default async function ClientDashboardPage() {
         </ul>
       </section>
 
+      {session.plan === "free" ? (
       <section className="mt-12 flex flex-col items-start justify-between gap-4 rounded-2xl bg-[#e6e6e6] p-5 shadow-card sm:flex-row sm:items-center">
         <div>
           <h2 className="text-xl font-semibold text-navy">Upgrade to Priority Support</h2>
@@ -83,6 +94,7 @@ export default async function ClientDashboardPage() {
           Upgrade Now
         </ButtonLink>
       </section>
+      ) : null}
     </div>
   );
 }

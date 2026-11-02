@@ -2,10 +2,17 @@ import type { Metadata } from "next";
 
 import { SignupForm } from "@/features/auth/components/auth-forms";
 import { AuthShell } from "@/features/auth/components/auth-shell";
+import { firstParam } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Create your account" };
 
-export default function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const next = firstParam((await searchParams).next);
+
   return (
     <AuthShell
       image="/images/auth/green-roof-model.webp"
@@ -13,7 +20,7 @@ export default function SignupPage() {
       title="Sign up to your account"
       subtitle="Sign up to start your retrofit services"
     >
-      <SignupForm />
+      <SignupForm next={next} />
     </AuthShell>
   );
 }

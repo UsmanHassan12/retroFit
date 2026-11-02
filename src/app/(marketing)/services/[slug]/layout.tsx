@@ -11,16 +11,13 @@ import {
 } from "@/features/services/components/detail-panels";
 import { PricingPanel } from "@/features/services/components/pricing-panel";
 import { ServiceGallery } from "@/features/services/components/service-gallery";
-import { getServiceBySlug, getServiceSlugs, startingPrice } from "@/features/services/queries";
+import { getServiceBySlug, startingPrice } from "@/features/services/queries";
 import { siteConfig } from "@/lib/site";
 
 type Params = { slug: string };
 
-/** Pre-render every service and every tab at build time. */
-export async function generateStaticParams(): Promise<Params[]> {
-  const slugs = await getServiceSlugs();
-  return slugs.map((slug) => ({ slug }));
-}
+/** Rendered per request from the catalogue in Postgres, so admin edits show immediately. */
+export const dynamic = "force-dynamic";
 
 /**
  * Shared shell for the service detail screens (Figma: Services / Included / Time / Compliance).

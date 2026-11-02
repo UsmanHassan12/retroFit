@@ -1,14 +1,31 @@
 import { ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
-import { PROJECT_TASKS, TASK_COLUMNS } from "@/features/admin/data";
+import { ProjectControls } from "@/features/admin/components/project-controls";
+import { TaskBoard } from "@/features/admin/components/task-board";
+import { getProjectBoard, getStaffOptions, PRIORITY_LABELS, STATUS_LABELS } from "@/features/admin/queries";
+import { requireStaff } from "@/lib/auth/guards";
+import { PHASE_LABELS, PRIORITIES, PROJECT_PHASES, PROJECT_STATUSES } from "@/server/domain";
+import { isAppError } from "@/server/errors";
 
 export const metadata: Metadata = { title: "Task Board" };
 
 export default async function AdminProjectBoardPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
+  const session = await requireStaff();
+
+  const data = await getProjectBoard(projectId).catch((error) => {
+    if (isAppError(error) && error.code === "NOT_FOUND") return null;
+    throw error;
+  });
+  if (!data) notFound();
+  const { board, project } = data;
+
+  const canAssign = session.role === "admin" || session.role === "coordinator";
+  const staff = canAssign ? await getStaffOptions() : [];
+  const now = Date.now();
 
   return (
     <div className="mx-auto max-w-[1120px]">
@@ -23,42 +40,57 @@ export default async function AdminProjectBoardPage({ params }: { params: Promis
             <ChevronRight className="size-4" />
           </li>
           <li aria-current="page" className="font-medium text-navy">
-            {projectId}
+            {project.reference}
           </li>
         </ol>
       </nav>
-      <h1 className="font-display mt-6 text-[34px] font-bold text-navy sm:text-[40px]">{projectId}</h1>
-      <p className="mt-2 text-xl text-muted">High-Efficiency Heat Pump Installation Cluster</p>
+      <h1 className="font-display mt-6 text-[34px] font-bold text-navy sm:text-[40px]">{project.reference}</h1>
+      <p className="mt-2 text-xl text-muted">{project.title}</p>
+      <p className="mt-2 text-sm text-muted">
+        {project.client?.name} · {project.property ? `${project.property.line1}, ${project.property.city} ${project.property.postcode}` : "No property yet"} ·{" "}
+        {project.service.title}
+      </p>
+
+      <ProjectControls
+        reference={project.reference}
+        values={{
+          phase: project.phase,
+          status: project.status,
+          priority: project.priority,
+          coordinatorId: project.coordinator?.id ?? "",
+          dueDate: project.dueDate?.slice(0, 10) ?? "",
+          issueSummary: project.issueSummary ?? "",
+          criticalIssue: project.criticalIssue,
+          phaseNotice: project.phaseNotice ?? "",
+        }}
+        phases={PROJECT_PHASES.map((phase) => ({ value: phase, label: PHASE_LABELS[phase] }))}
+        statuses={PROJECT_STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] ?? status }))}
+        priorities={PRIORITIES.map((priority) => ({ value: priority, label: PRIORITY_LABELS[priority] ?? priority }))}
+        coordinators={
+          canAssign
+            ? staff.filter((member) => member.role === "COORDINATOR" || member.role === "ADMIN").map((member) => ({ value: member.id, label: member.name }))
+            : null
+        }
+      />
 
       <h2 className="mt-10 text-xl font-semibold text-navy">Task Board</h2>
-      {/* Drag-and-drop between columns is a follow-up; columns mirror the PAS 2035 workflow states. */}
-      <div className="mt-4 grid grid-flow-col auto-cols-[260px] gap-4 overflow-x-auto pb-4 lg:grid-flow-row lg:grid-cols-4 lg:auto-cols-auto">
-        {TASK_COLUMNS.map((column) => {
-          const tasks = PROJECT_TASKS.filter((task) => task.column === column);
-          return (
-            <section key={column} aria-label={`${column} (${tasks.length})`} className="flex min-h-[420px] flex-col rounded-2xl bg-white shadow-card lg:min-h-[490px]">
-              <header className="flex items-center justify-between border-b border-line-soft px-4 py-5">
-                <h3 className="text-xs font-semibold text-navy">{column}</h3>
-                <span className="text-base text-brand">({tasks.length})</span>
-              </header>
-              <ul className="grid content-start gap-3 p-4">
-                {tasks.map((task) => (
-                  <li key={task.id} className="rounded-xl border border-line-soft bg-white p-3 transition-shadow hover:shadow-soft">
-                    <p className="text-base text-navy">{task.title}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {task.tags.map((tag) => (
-                        <Badge key={tag} tone={tag === "Done" ? "success" : "neutral"} className="rounded-md px-2 py-1 text-[10px] normal-case tracking-normal">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          );
-        })}
-      </div>
+      <p className="mt-1 text-sm text-muted">Drag cards between columns. Tasks in “Awaiting Client” are visible to the client.</p>
+      <TaskBoard
+        key={board.columns.map((column) => column.tasks.map((task) => `${task.id}:${task.position}`).join()).join("|")}
+        projectRef={project.reference}
+        initialColumns={board.columns.map((column) => ({
+          key: column.key,
+          label: column.label,
+          tasks: column.tasks.map((task) => ({
+            id: task.id,
+            title: task.title,
+            tags: task.tags,
+            visibleToClient: task.visibleToClient,
+            assignee: task.assignee?.name ?? null,
+            overdue: column.key !== "DONE" && Boolean(task.dueDate && new Date(task.dueDate).getTime() < now),
+          })),
+        }))}
+      />
     </div>
   );
 }

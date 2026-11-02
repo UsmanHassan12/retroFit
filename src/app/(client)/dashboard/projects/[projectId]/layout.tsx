@@ -9,7 +9,7 @@ import {
   ProjectOverviewPanel,
   ProjectTimelinePanel,
 } from "@/features/projects/components/project-panels";
-import { getClientProfile, getProject } from "@/features/projects/queries";
+import { getProject } from "@/features/projects/queries";
 import { requireSession } from "@/lib/auth/guards";
 
 /**
@@ -24,7 +24,8 @@ export default async function ProjectLayout({
   children: React.ReactNode;
 }) {
   const { projectId } = await params;
-  const [project, session, profile] = await Promise.all([getProject(projectId), requireSession(), getClientProfile()]);
+  const session = await requireSession(`/dashboard/projects/${projectId}`);
+  const project = await getProject(projectId);
   if (!project) notFound();
 
   const base = `/dashboard/projects/${project.id}`;
@@ -46,8 +47,9 @@ export default async function ProjectLayout({
               badge: unread || undefined,
               content: (
                 <ChatPanel
+                  projectRef={project.id}
                   initialMessages={project.messages}
-                  me={{ name: session.name, role: "Client", avatar: profile.avatar }}
+                  me={{ name: session.name, role: "Client", avatar: session.avatarUrl ?? undefined }}
                 />
               ),
             },

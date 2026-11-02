@@ -29,6 +29,7 @@ export function ProjectOverviewPanel({ project }: { project: Project }) {
         <h2 id="recent-activity" className="text-base font-semibold text-navy">
           Recent Activity
         </h2>
+        {project.activity.length === 0 ? <p className="mt-4 text-sm text-muted">No activity yet.</p> : null}
         <ul className="mt-3">
           {project.activity.map((item) => (
             <li key={item.id} className="flex items-center gap-4 border-b border-dotted border-line py-4 last:border-0">
@@ -56,6 +57,7 @@ export function ProjectDocumentsPanel({ project }: { project: Project }) {
         <h2 id="your-documents" className="text-base font-semibold text-navy">
           Your Documents
         </h2>
+        {project.documents.length === 0 ? <p className="mt-4 text-sm text-muted">No documents yet. Upload your EPC, floor plans and proof of ownership.</p> : null}
         <ul className="mt-3">
           {project.documents.map((doc) => (
             <li key={doc.id} className="flex items-center gap-4 border-b border-dotted border-line py-4 last:border-0">
@@ -68,14 +70,14 @@ export function ProjectDocumentsPanel({ project }: { project: Project }) {
                   Version {doc.version} • {doc.uploadedAt}
                 </p>
               </div>
-              <button type="button" className="text-sm font-medium text-brand hover:underline" aria-label={`Download ${doc.name}`}>
+              <a href={doc.href} className="text-sm font-medium text-brand hover:underline" aria-label={`Download ${doc.name}`}>
                 Download
-              </button>
+              </a>
             </li>
           ))}
         </ul>
       </section>
-      <DocumentActions />
+      <DocumentActions projectRef={project.id} reportHref={project.deliverables.find((item) => item.available)?.href} />
     </div>
   );
 }
@@ -120,11 +122,11 @@ export function ProjectDeliverablesPanel({ project }: { project: Project }) {
               </IconTile>
               <h3 className="mt-6 text-base font-semibold text-navy">{item.title}</h3>
               <p className="mt-2 flex-1 text-xs text-muted">{item.description}</p>
-              {item.available ? (
-                <button type="button" className={buttonClass}>
+              {item.available && item.href ? (
+                <a href={item.href} className={buttonClass}>
                   <Download aria-hidden />
                   Download Report
-                </button>
+                </a>
               ) : (
                 <span aria-disabled="true" title="Available once the report is delivered" className={buttonClass}>
                   <Download aria-hidden />

@@ -42,12 +42,14 @@ export function ProjectHeader({ project }: { project: Project }) {
             <div>
               <h2 className="text-2xl font-medium text-navy">{project.address.line1}</h2>
               <p className="mt-3 text-sm text-muted">
-                {project.address.city}, {project.address.postcode}, UK
+                {[project.address.city, project.address.postcode, "UK"].filter(Boolean).join(", ")}
               </p>
             </div>
-            <Badge tone="success" className="px-3 py-2 text-xs">
-              {project.scheme}
-            </Badge>
+            {project.scheme ? (
+              <Badge tone="success" className="px-3 py-2 text-xs">
+                {project.scheme}
+              </Badge>
+            ) : null}
           </div>
           <div className="mt-4 flex items-center gap-3 border-t border-dotted border-line pt-4">
             <Avatar name={project.coordinator.name} src={project.coordinator.avatar} size={48} />

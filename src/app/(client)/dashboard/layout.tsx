@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { DashboardFrame } from "@/components/dashboard/dashboard-frame";
 import { clientNav } from "@/components/dashboard/nav-config";
 import { Topbar } from "@/components/dashboard/topbar";
-import { getClientProfile } from "@/features/projects/queries";
+import { ImpersonationBanner } from "@/components/dashboard/impersonation-banner";
 import { requireSession } from "@/lib/auth/guards";
 
 export const metadata: Metadata = {
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ClientDashboardLayout({ children }: { children: React.ReactNode }) {
-  const [session, profile] = await Promise.all([requireSession("/dashboard"), getClientProfile()]);
+  const session = await requireSession("/dashboard");
 
   return (
     <DashboardFrame
@@ -20,13 +20,14 @@ export default async function ClientDashboardLayout({ children }: { children: Re
       cta={{ label: "New Project", href: "/services" }}
       topbar={
         <Topbar
-          user={{ name: session.name, avatar: profile.avatar }}
+          user={{ name: session.name, avatar: session.avatarUrl ?? undefined }}
           searchAction="/dashboard/projects"
           searchPlaceholder="Search your projects..."
           profileHref="/dashboard/profile"
         />
       }
     >
+      {session.impersonating ? <ImpersonationBanner name={session.name} /> : null}
       {children}
     </DashboardFrame>
   );

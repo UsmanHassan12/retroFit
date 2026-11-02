@@ -1,15 +1,10 @@
 /**
- * Pure pricing maths shared by the server (authoritative) and the receipt UI (display).
+ * Display-side pricing maths for the receipt (pounds). The server recomputes every order in
+ * pence (src/server/services/pricing.ts) — this mirror only keeps the UI responsive.
  * No imports, so it's safe to bundle on the client.
  */
 
 export const VAT_RATE = 0.2;
-
-/** Demo discount codes. Real codes are validated by the payments API. */
-export const DISCOUNT_CODES: Record<string, number> = {
-  RETRO2026: 0.1,
-  WELCOME5: 0.05,
-};
 
 export type OrderTotals = {
   base: number;
@@ -27,9 +22,4 @@ export function calculateTotals(input: { base: number; addOns: number[] }, disco
   const discount = round(subtotal * discountRate);
   const vat = round((subtotal - discount) * VAT_RATE);
   return { base: input.base, addOns, discount, vat, total: round(subtotal - discount + vat) };
-}
-
-export function discountRateFor(code: string | undefined | null) {
-  if (!code) return 0;
-  return DISCOUNT_CODES[code.trim().toUpperCase()] ?? 0;
 }

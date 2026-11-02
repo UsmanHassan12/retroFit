@@ -8,7 +8,20 @@ import { Field, Input, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { UploadDropzone } from "@/components/ui/upload-dropzone";
 
+import { api } from "@/lib/api/client";
+
 import { saveService, type FormState } from "../actions";
+
+/** Upload the cover image straight to storage; returns its public URL. */
+async function uploadImage(file: File) {
+  const { publicUrl, upload } = await api<{ publicUrl: string; upload: { url: string; method: "PUT"; headers: Record<string, string> } }>(
+    "/api/admin/uploads",
+    { method: "POST", json: { fileName: file.name, mimeType: file.type, sizeBytes: file.size } },
+  );
+  const response = await fetch(upload.url, { method: upload.method, headers: upload.headers, body: file });
+  if (!response.ok) throw new Error("The image upload failed. Please try again.");
+  return publicUrl;
+}
 
 type Tier = { key: string; name: string; price: string; days: string; deliverables: string[] };
 
@@ -34,13 +47,24 @@ export function ServiceForm() {
   const updateTier = (key: string, patch: Partial<Tier>) =>
     setTiers((current) => current.map((tier) => (tier.key === key ? { ...tier, ...patch } : tier)));
 
-  function submit(event: React.FormEvent) {
+  function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const media = new FormData(event.currentTarget).get("media");
     startTransition(async () => {
+      let imageUrl: string | undefined;
+      if (media instanceof File && media.size > 0) {
+        try {
+          imageUrl = await uploadImage(media);
+        } catch (error) {
+          setState({ ok: false, message: error instanceof Error ? error.message : "The image upload failed." });
+          return;
+        }
+      }
       const result = await saveService({
         title,
         description,
         active,
+        imageUrl,
         tiers: tiers.map((tier) => ({
           name: tier.name,
           price: tier.price,
@@ -93,7 +117,7 @@ export function ServiceForm() {
 
           <div className="grid gap-2">
             <span className="text-xs text-navy">Media</span>
-            <UploadDropzone title="Upload service images" hint="JPEG or PNG up to 10MB" name="media" className="min-h-[210px]" />
+            <UploadDropzone title="Upload a cover image" hint="JPEG, PNG or WebP up to 10MB" name="media" accept=".jpg,.jpeg,.png,.webp" className="min-h-[210px]" />
           </div>
 
           <div>

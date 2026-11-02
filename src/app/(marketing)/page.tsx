@@ -6,6 +6,9 @@ import { HowItWorks } from "@/features/marketing/components/how-it-works";
 import { Testimonials } from "@/features/marketing/components/testimonials";
 import { TrustedBy } from "@/features/marketing/components/trusted-by";
 
+/** Featured services come from the live catalogue. */
+export const dynamic = "force-dynamic";
+
 export default function HomePage() {
   return (
     <>

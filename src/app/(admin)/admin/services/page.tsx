@@ -1,15 +1,21 @@
-import { Plus } from "lucide-react";
+import { ExternalLink, Plus } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/dashboard/page-header";
 import { ButtonLink } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { ADMIN_SERVICES } from "@/features/admin/data";
-import { formatPrice } from "@/lib/format";
+import { setServiceActive } from "@/features/admin/actions";
+import { getAdminServices } from "@/features/admin/queries";
+import { requireAdmin } from "@/lib/auth/guards";
+import { formatPrice, formatRelative } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Services Management" };
 
-export default function AdminServicesPage() {
+export default async function AdminServicesPage() {
+  await requireAdmin();
+  const services = await getAdminServices();
+
   return (
     <div className="mx-auto max-w-[1120px]">
       <PageHeader
@@ -31,18 +37,35 @@ export default function AdminServicesPage() {
               <TH>Working Days</TH>
               <TH>Last Updated</TH>
               <TH>Deliverables</TH>
+              <TH>Orders</TH>
               <TH>Service Status</TH>
             </tr>
           </THead>
           <TBody>
-            {ADMIN_SERVICES.map((service) => (
+            {services.map((service) => (
               <TR key={service.id}>
-                <TD>{service.title}</TD>
-                <TD>{formatPrice(service.price)}</TD>
-                <TD>{service.days}</TD>
-                <TD>{service.updated}</TD>
-                <TD>{service.deliverables}</TD>
-                <TD className={service.active ? "text-brand" : "text-faint"}>{service.active ? "Active" : "Inactive"}</TD>
+                <TD>
+                  <Link href={`/services/${service.slug}`} className="inline-flex items-center gap-1.5 hover:text-brand" target="_blank">
+                    {service.title}
+                    <ExternalLink className="size-3.5 text-faint" aria-label="(opens storefront page)" />
+                  </Link>
+                </TD>
+                <TD>{formatPrice(service.fromPricePence / 100)}</TD>
+                <TD>{Math.min(...service.tiers.map((tier: { deliveryDays: number }) => tier.deliveryDays))}</TD>
+                <TD>{formatRelative(service.updatedAt)}</TD>
+                <TD>{service.deliverableCount}</TD>
+                <TD>{service.orders}</TD>
+                <TD>
+                  <form action={setServiceActive.bind(null, service.id, !service.active)}>
+                    <button
+                      type="submit"
+                      title={service.active ? "Click to hide from the storefront" : "Click to publish"}
+                      className={service.active ? "text-brand hover:underline" : "text-faint hover:underline"}
+                    >
+                      {service.active ? "Active" : "Inactive"}
+                    </button>
+                  </form>
+                </TD>
               </TR>
             ))}
           </TBody>

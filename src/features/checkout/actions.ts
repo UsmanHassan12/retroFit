@@ -3,15 +3,13 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { getServiceBySlug } from "@/features/services/queries";
-import { getSession } from "@/lib/auth/session";
-
-import { resolveSelection, totalsFor } from "./lib/order";
-import { discountRateFor } from "./lib/pricing";
+import { getCurrentUser, requireUser } from "@/server/auth/session";
+import { messageFor } from "@/server/http";
+import { checkDiscountCode, checkout, createOrder } from "@/server/services/orders";
 
 const placeOrderSchema = z.object({
   slug: z.string().min(1),
-  tier: z.string().optional(),
+  tier: z.string().min(1),
   addons: z.string().optional(),
   discountCode: z.string().max(32).optional(),
 });
@@ -19,30 +17,35 @@ const placeOrderSchema = z.object({
 export type PlaceOrderState = { error?: string };
 
 /**
- * Creates the order. Prices are always recomputed on the server from the catalogue —
- * nothing price-related is trusted from the browser.
- * TODO: create a Stripe Checkout Session / PayPal order here and redirect to it.
+ * Creates the order and starts payment. Prices are recomputed on the server from the catalogue
+ * (nothing price-related is trusted from the browser), then the browser is sent to Stripe
+ * Checkout — or, in development without Stripe, straight to the confirmation page.
  */
 export async function placeOrder(_prev: PlaceOrderState, formData: FormData): Promise<PlaceOrderState> {
-  const session = await getSession();
-  if (!session) redirect("/login");
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
 
   const parsed = placeOrderSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong with your order. Please try again." };
 
-  const service = await getServiceBySlug(parsed.data.slug);
-  if (!service) return { error: "This service is no longer available." };
+  let url: string;
+  try {
+    const order = await createOrder(user, {
+      serviceId: parsed.data.slug,
+      tierId: parsed.data.tier,
+      addonIds: (parsed.data.addons ?? "").split(",").filter(Boolean),
+      discountCode: parsed.data.discountCode || undefined,
+    });
+    ({ url } = await checkout(user, order.id));
+  } catch (error) {
+    return { error: messageFor(error, "We couldn’t start your payment. Please try again.") };
+  }
+  redirect(url);
+}
 
-  const selection = resolveSelection(service, parsed.data);
-  const totals = totalsFor(selection, discountRateFor(parsed.data.discountCode));
-
-  // Simulated order reference — the projects API returns the real one.
-  const reference = `RET-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-  const params = new URLSearchParams({
-    ref: reference,
-    service: service.slug,
-    total: totals.total.toFixed(2),
-  });
-  redirect(`/checkout/confirmation?${params.toString()}`);
+/** Receipt "Apply" button. Returns the percentage, or null when the code isn't valid. */
+export async function applyDiscountCode(code: string): Promise<{ code: string; percentOff: number } | null> {
+  await requireUser();
+  if (!code.trim() || code.length > 32) return null;
+  return checkDiscountCode(code);
 }

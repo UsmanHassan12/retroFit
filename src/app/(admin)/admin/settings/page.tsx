@@ -3,11 +3,22 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Badge } from "@/components/ui/badge";
 import { EmailTemplateEditor } from "@/features/admin/components/email-template-editor";
-import { DEFAULT_EMAIL_TEMPLATE, INTEGRATIONS } from "@/features/admin/data";
+import { getEmailTemplates, getIntegrations } from "@/features/admin/queries";
+import { requireAdmin } from "@/lib/auth/guards";
 
 export const metadata: Metadata = { title: "Platform Settings" };
 
-export default function SettingsPage() {
+const TEMPLATE_LABELS: Record<string, string> = {
+  project_update: "Project update",
+  order_confirmation: "Order confirmation",
+  invite: "Staff invitation",
+  password_reset: "Password reset",
+};
+
+export default async function SettingsPage() {
+  await requireAdmin();
+  const [integrations, templates] = await Promise.all([getIntegrations(), getEmailTemplates()]);
+
   return (
     <div className="mx-auto max-w-[1120px]">
       <PageHeader
@@ -20,11 +31,11 @@ export default function SettingsPage() {
           Integration Health
         </h2>
         <ul className="mt-10 grid gap-6 md:grid-cols-3">
-          {INTEGRATIONS.map((integration) => (
-            <li key={integration.name} className="rounded-xl border border-line-soft p-4">
+          {integrations.map((integration) => (
+            <li key={integration.key} className="rounded-xl border border-line-soft p-4">
               <div className="flex items-start justify-between gap-3">
                 <p className="font-semibold text-navy">{integration.name}</p>
-                <Badge tone="success" dot className="text-[11px] font-normal normal-case tracking-normal">
+                <Badge tone={integration.connected ? "success" : "warning"} dot className="text-[11px] font-normal tracking-normal normal-case">
                   {integration.status}
                 </Badge>
               </div>
@@ -36,10 +47,12 @@ export default function SettingsPage() {
 
       <section aria-labelledby="email-template" className="mt-9 rounded-2xl bg-white p-4 shadow-card">
         <h2 id="email-template" className="text-xl font-medium text-navy">
-          Email Template
+          Email Templates
         </h2>
         <div className="mt-10">
-          <EmailTemplateEditor initial={DEFAULT_EMAIL_TEMPLATE} />
+          <EmailTemplateEditor
+            templates={templates.map((template) => ({ ...template, label: TEMPLATE_LABELS[template.key] ?? template.key }))}
+          />
         </div>
       </section>
     </div>
