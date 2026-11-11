@@ -4,7 +4,7 @@ import { ShieldCheck } from "lucide-react";
 export function TrustBadge() {
   return (
     <div className="relative size-[132px] shrink-0 text-white" role="img" aria-label="Registered TrustMark installer">
-      <svg viewBox="0 0 132 132" className="animate-spin-slow absolute inset-0 size-full" aria-hidden>
+      <svg viewBox="0 0 132 132" className=" absolute inset-0 size-full" aria-hidden>
         <defs>
           <path id="trust-ring-outer" d="M66 66m-56 0a56 56 0 1 1 112 0a56 56 0 1 1 -112 0" />
           <path id="trust-ring-inner" d="M66 66m-40 0a40 40 0 1 1 80 0a40 40 0 1 1 -80 0" />
