@@ -22,7 +22,9 @@ const schema = z.object({
 
   STRIPE_SECRET_KEY: optional,
   STRIPE_WEBHOOK_SECRET: optional,
-  STRIPE_PRICE_PRIORITY: optional,
+
+  /** Bearer token the scheduler sends to /api/cron/* (billing cycle). */
+  CRON_SECRET: optional,
 
   AWS_REGION: z.string().default("eu-west-2"),
   S3_BUCKET: optional,

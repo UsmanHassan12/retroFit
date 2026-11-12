@@ -27,7 +27,7 @@ export function projectScope(user: Who) {
 export async function findAccessibleProject(user: Who, reference: string) {
   const project = await db.project.findFirst({
     where: { reference, ...projectScope(user) },
-    select: { id: true, reference: true, clientId: true, coordinatorId: true, title: true, phase: true },
+    select: { id: true, reference: true, clientId: true, coordinatorId: true, title: true, status: true },
   });
   if (!project) throw notFound("Project");
   return project;

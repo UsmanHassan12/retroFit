@@ -32,12 +32,12 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
 }
 
 /** Upload one project document: request a presigned URL, PUT the bytes, confirm. */
-export async function uploadProjectDocument(projectRef: string, file: File) {
+export async function uploadProjectDocument(projectRef: string, file: File, requirementKey?: string) {
   const base = `/api/projects/${encodeURIComponent(projectRef)}/documents`;
   const { document, upload } = await api<{
     document: { id: string };
     upload: { url: string; method: "PUT"; headers: Record<string, string> };
-  }>(base, { method: "POST", json: { fileName: file.name, mimeType: file.type, sizeBytes: file.size } });
+  }>(base, { method: "POST", json: { fileName: file.name, mimeType: file.type, sizeBytes: file.size, ...(requirementKey ? { requirementKey } : {}) } });
 
   const put = await fetch(upload.url, { method: upload.method, headers: upload.headers, body: file });
   if (!put.ok) throw new ApiError(put.status, "UPLOAD_FAILED", `Upload of ${file.name} failed. Please try again.`);

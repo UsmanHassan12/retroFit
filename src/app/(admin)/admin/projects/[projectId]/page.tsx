@@ -5,9 +5,9 @@ import { notFound } from "next/navigation";
 
 import { ProjectControls } from "@/features/admin/components/project-controls";
 import { TaskBoard } from "@/features/admin/components/task-board";
-import { getProjectBoard, getStaffOptions, PRIORITY_LABELS, STATUS_LABELS } from "@/features/admin/queries";
+import { getProjectBoard, getStaffOptions, HEALTH_LABELS, PRIORITY_LABELS } from "@/features/admin/queries";
 import { requireStaff } from "@/lib/auth/guards";
-import { PHASE_LABELS, PRIORITIES, PROJECT_PHASES, PROJECT_STATUSES } from "@/server/domain";
+import { PRIORITIES, PROJECT_HEALTH, PROJECT_STATUS_LABELS, PROJECT_STATUSES } from "@/server/domain";
 import { isAppError } from "@/server/errors";
 
 export const metadata: Metadata = { title: "Task Board" };
@@ -48,14 +48,21 @@ export default async function AdminProjectBoardPage({ params }: { params: Promis
       <p className="mt-2 text-xl text-muted">{project.title}</p>
       <p className="mt-2 text-sm text-muted">
         {project.client?.name} · {project.property ? `${project.property.line1}, ${project.property.city} ${project.property.postcode}` : "No property yet"} ·{" "}
-        {project.service.title}
+        {project.service.title} · <span className="font-semibold text-navy">{project.statusLabel}</span>
+        {project.partnerPriority ? <span className="ml-2 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700">Premium Partner</span> : null}
       </p>
+      {project.missing.answers.length || project.missing.documents.length ? (
+        <p className="mt-3 rounded-lg bg-warning-soft px-4 py-3 text-sm text-[#7a5500]">
+          Waiting for: {[...project.missing.answers.map((item) => item.label), ...project.missing.documents.map((item) => item.label)].join(", ")}
+        </p>
+      ) : null}
 
       <ProjectControls
         reference={project.reference}
         values={{
-          phase: project.phase,
+          stage: String(project.stage?.position ?? 0),
           status: project.status,
+          health: project.health,
           priority: project.priority,
           coordinatorId: project.coordinator?.id ?? "",
           dueDate: project.dueDate?.slice(0, 10) ?? "",
@@ -63,8 +70,9 @@ export default async function AdminProjectBoardPage({ params }: { params: Promis
           criticalIssue: project.criticalIssue,
           phaseNotice: project.phaseNotice ?? "",
         }}
-        phases={PROJECT_PHASES.map((phase) => ({ value: phase, label: PHASE_LABELS[phase] }))}
-        statuses={PROJECT_STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] ?? status }))}
+        stages={project.milestones.map((milestone) => ({ value: String(milestone.position), label: `${milestone.position + 1}. ${milestone.title}` }))}
+        statuses={PROJECT_STATUSES.filter((status) => status !== "CANCELLED").map((status) => ({ value: status, label: PROJECT_STATUS_LABELS[status] }))}
+        healths={PROJECT_HEALTH.map((health) => ({ value: health, label: HEALTH_LABELS[health] ?? health }))}
         priorities={PRIORITIES.map((priority) => ({ value: priority, label: PRIORITY_LABELS[priority] ?? priority }))}
         coordinators={
           canAssign

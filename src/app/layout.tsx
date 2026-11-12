@@ -48,7 +48,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       className={`${inter.variable} ${nunito.variable} ${exo.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-dvh">{children}</body>
+      {/* suppressHydrationWarning: browser extensions (e.g. ColorZilla's cz-shortcut-listen, Grammarly)
+          add attributes to <body> before React hydrates. This only ignores attribute differences on
+          <body> itself; mismatches inside the page are still reported. */}
+      <body className="min-h-dvh" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

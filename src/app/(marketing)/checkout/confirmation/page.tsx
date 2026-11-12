@@ -23,7 +23,8 @@ export default async function ConfirmationPage({
   const order = reference ? await getConfirmation(await requireUser(), reference) : null;
   if (!order) notFound();
 
-  const paid = order.status === "PAID" && order.projectReference;
+  const paid = order.status === "CONFIRMED" && order.projectReference;
+  const onInvoice = order.paymentMethod === "WEEKLY_INVOICE";
 
   return (
     <BlueprintSection innerClassName="px-4 py-24">
@@ -41,9 +42,10 @@ export default async function ConfirmationPage({
         <p className="mt-3 text-muted">
           {paid ? (
             <>
-              Your project <span className="font-semibold text-navy">{order.projectReference}</span> has been created for{" "}
-              <span className="font-semibold text-navy">{order.service.title}</span>. Your coordinator will be in touch within one
-              working day.
+              {order.projectReferences.length > 1 ? "Your projects " : "Your project "}
+              <span className="font-semibold text-navy">{order.projectReferences.join(", ")}</span> {order.projectReferences.length > 1 ? "have" : "has"} been created for{" "}
+              <span className="font-semibold text-navy">{order.service?.title}</span>. If we still need details or documents, your project page lists them.
+              {onInvoice ? " This booking will appear on your weekly invoice." : ""}
             </>
           ) : order.status === "PENDING_PAYMENT" ? (
             <>This usually takes a few seconds. This page refreshes automatically.</>
@@ -54,7 +56,7 @@ export default async function ConfirmationPage({
           )}
         </p>
         <p className="mt-6 text-sm text-muted">
-          Order {order.reference} · {paid ? "Amount paid" : "Total"}:{" "}
+          Order {order.reference} · {paid && !onInvoice ? "Amount paid" : "Total"}:{" "}
           <span className="font-semibold text-navy">{formatCurrency(order.breakdown.totalPence / 100)}</span> (incl. VAT)
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">

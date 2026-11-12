@@ -4,7 +4,7 @@ import type { Tx } from "../db";
 
 /**
  * Human-readable, gap-free references using a row-locked counter per year:
- *   projects → RET-2026-0042, orders → ORD-2026-000123
+ *   projects → RET-2026-0042, orders → ORD-2026-000123, invoices and receipts → INV-2026-0001
  */
 async function next(tx: Tx, key: string) {
   const counter = await tx.counter.upsert({
@@ -30,5 +30,5 @@ export async function nextOrderReference(tx: Tx, now = new Date()) {
 export async function nextInvoiceNumber(tx: Tx, now = new Date()) {
   const year = now.getUTCFullYear();
   const value = await next(tx, `invoice-${year}`);
-  return `INV-${year}-${String(value).padStart(5, "0")}`;
+  return `INV-${year}-${String(value).padStart(4, "0")}`;
 }

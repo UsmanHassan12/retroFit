@@ -50,7 +50,7 @@ export function ServiceCard({ service, priority = false }: { service: Service; p
           {service.turnaround}
         </p>
         <p className="text-right">
-          <span className="block text-xs font-semibold tracking-[0.05em] text-muted">FROM</span>
+          <span className="block text-xs font-semibold tracking-[0.05em] text-muted uppercase">Per {service.pricing.unitLabel}</span>
           <span className="text-2xl font-bold tracking-tight text-navy">{formatPrice(startingPrice(service))}</span>
         </p>
       </div>

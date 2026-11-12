@@ -4,7 +4,7 @@ import { Bold, Italic, List, Loader2, Plus, Trash2, X } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/input";
+import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { UploadDropzone } from "@/components/ui/upload-dropzone";
 
@@ -23,29 +23,49 @@ async function uploadImage(file: File) {
   return publicUrl;
 }
 
-type Tier = { key: string; name: string; price: string; days: string; deliverables: string[] };
+type Stage = { key: string; name: string; role: string; slaDays: string; status: string };
 
-const newTier = (name = ""): Tier => ({
-  key: crypto.randomUUID(),
-  name,
-  price: "",
-  days: "",
-  deliverables: [""],
-});
+const newStage = (name = "", role = "COORDINATOR", status = ""): Stage => ({ key: crypto.randomUUID(), name, role, slaDays: "", status });
 
+const CATEGORIES = ["ASSESSMENT", "DESIGN", "COORDINATION", "CALCULATIONS", "SURVEYS", "FUNDING", "COMPLIANCE"];
+const UNITS = [
+  ["PROPERTY", "Per property"],
+  ["ELEMENT", "Per element"],
+  ["JUNCTION", "Per junction"],
+  ["VISIT", "Per visit"],
+  ["PACKAGE", "Per package"],
+] as const;
+const ROLES = ["ASSESSOR", "DESIGNER", "COORDINATOR", "ADMIN"];
+const STATUSES = [
+  ["", "Keep status"],
+  ["SCHEDULED", "Visit scheduled"],
+  ["IN_PROGRESS", "In progress"],
+  ["IN_QA", "Quality check"],
+  ["DELIVERED", "Delivered"],
+  ["COMPLETED", "Completed"],
+] as const;
+const label = (value: string) => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, " ");
+
+/**
+ * Add a service. Prices, turnaround and stages are placeholders until StepSoft confirms, so
+ * everything here is editable later. Intake questions, document lists and add-ons are edited
+ * through PUT /api/admin/services/:id.
+ */
 export function ServiceForm() {
+  const [code, setCode] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("ASSESSMENT");
   const [active, setActive] = useState(true);
-  const [tiers, setTiers] = useState<Tier[]>([
-    { key: "standard", name: "Standard", price: "290", days: "3", deliverables: ["On-site property inspection", "Basic energy efficiency report"] },
-  ]);
+  const [pricing, setPricing] = useState({ priceUnit: "PROPERTY", listPrice: "", siteVisit: "NONE", standardDays: "", fastTrackDays: "", revisionRounds: "2" });
+  const [stages, setStages] = useState<Stage[]>([newStage("Order confirmed"), newStage("Work in progress", "COORDINATOR", "IN_PROGRESS"), newStage("QA", "COORDINATOR", "IN_QA"), newStage("Delivered", "COORDINATOR", "DELIVERED")]);
+  const [deliverables, setDeliverables] = useState<string[]>([""]);
   const [state, setState] = useState<FormState>({});
   const [pending, startTransition] = useTransition();
   const errors = state.errors ?? {};
 
-  const updateTier = (key: string, patch: Partial<Tier>) =>
-    setTiers((current) => current.map((tier) => (tier.key === key ? { ...tier, ...patch } : tier)));
+  const updateStage = (key: string, patch: Partial<Stage>) => setStages((current) => current.map((stage) => (stage.key === key ? { ...stage, ...patch } : stage)));
+  const setPrice = (patch: Partial<typeof pricing>) => setPricing((current) => ({ ...current, ...patch }));
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,16 +81,15 @@ export function ServiceForm() {
         }
       }
       const result = await saveService({
+        code,
         title,
         description,
+        category,
         active,
         imageUrl,
-        tiers: tiers.map((tier) => ({
-          name: tier.name,
-          price: tier.price,
-          days: tier.days,
-          deliverables: tier.deliverables.filter((item) => item.trim()),
-        })),
+        ...pricing,
+        stages: stages.map(({ name, role, slaDays, status }) => ({ name, role, slaDays, status })),
+        deliverables: deliverables.map((item) => item.trim()).filter(Boolean),
       });
       if (result) setState(result);
     });
@@ -120,78 +139,118 @@ export function ServiceForm() {
             <UploadDropzone title="Upload a cover image" hint="JPEG, PNG or WebP up to 10MB" name="media" accept=".jpg,.jpeg,.png,.webp" className="min-h-[210px]" />
           </div>
 
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-navy">Pricing Tiers</span>
-              <Button variant="ocean" size="sm" onClick={() => setTiers((current) => [...current, newTier()])}>
-                <Plus aria-hidden />
-                Add Tier
-              </Button>
-            </div>
-            {errors.tiers ? <p className="mt-2 text-xs text-danger">{errors.tiers}</p> : null}
-
-            <div className="mt-4 grid gap-4">
-              {tiers.map((tier, tierIndex) => (
-                <fieldset key={tier.key} className="rounded-xl border border-line-soft p-4">
-                  <legend className="sr-only">Tier {tierIndex + 1}</legend>
-                  <div className="grid gap-6 sm:grid-cols-3">
-                    <Field label="Tier name" htmlFor={`${tier.key}-name`} error={errors[`tiers.${tierIndex}.name`]} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
-                      <Input id={`${tier.key}-name`} value={tier.name} onChange={(event) => updateTier(tier.key, { name: event.target.value })} />
-                    </Field>
-                    <Field label="Price (£)" htmlFor={`${tier.key}-price`} error={errors[`tiers.${tierIndex}.price`]} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
-                      <Input id={`${tier.key}-price`} inputMode="decimal" value={tier.price} onChange={(event) => updateTier(tier.key, { price: event.target.value })} />
-                    </Field>
-                    <Field label="Days to complete" htmlFor={`${tier.key}-days`} error={errors[`tiers.${tierIndex}.days`]} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
-                      <Input id={`${tier.key}-days`} inputMode="numeric" value={tier.days} onChange={(event) => updateTier(tier.key, { days: event.target.value })} />
-                    </Field>
-                  </div>
-
-                  <p className="mt-6 text-xs font-semibold tracking-[0.05em] text-navy uppercase">Deliverables</p>
-                  <ul className="mt-3 grid gap-3">
-                    {tier.deliverables.map((deliverable, index) => (
-                      <li key={index} className="flex items-center gap-3">
-                        <Input
-                          aria-label={`Deliverable ${index + 1}`}
-                          value={deliverable}
-                          onChange={(event) =>
-                            updateTier(tier.key, {
-                              deliverables: tier.deliverables.map((item, i) => (i === index ? event.target.value : item)),
-                            })
-                          }
-                        />
-                        <button
-                          type="button"
-                          aria-label={`Remove deliverable ${index + 1}`}
-                          onClick={() => updateTier(tier.key, { deliverables: tier.deliverables.filter((_, i) => i !== index) })}
-                          className="rounded p-2 text-navy hover:bg-canvas"
-                        >
-                          <X className="size-5" aria-hidden />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  {errors[`tiers.${tierIndex}.deliverables`] ? (
-                    <p className="mt-2 text-xs text-danger">{errors[`tiers.${tierIndex}.deliverables`]}</p>
-                  ) : null}
-                  <div className="mt-4 flex justify-between">
-                    {tiers.length > 1 ? (
-                      <Button variant="ghost" size="sm" onClick={() => setTiers((current) => current.filter((item) => item.key !== tier.key))}>
-                        <Trash2 aria-hidden />
-                        Remove tier
-                      </Button>
-                    ) : (
-                      <span />
-                    )}
-                    <Button variant="ocean" size="sm" onClick={() => updateTier(tier.key, { deliverables: [...tier.deliverables, ""] })}>
-                      <Plus aria-hidden />
-                      Add Deliverable
-                    </Button>
-                  </div>
-                </fieldset>
-              ))}
-            </div>
-          </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-4 shadow-card">
+        <h2 className="text-xl font-medium text-navy">Pricing &amp; delivery</h2>
+        <p className="mt-1 text-sm text-faint">One list price per unit (excl. VAT). Partners get their discount and the fast-track turnaround automatically.</p>
+        <div className="mt-6 grid gap-6 sm:grid-cols-3">
+          <Field label="Code" htmlFor="code" error={errors.code} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+            <Input id="code" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="e.g. RA" maxLength={8} />
+          </Field>
+          <Field label="Category" htmlFor="category" error={errors.category} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+            <Select id="category" value={category} onChange={(event) => setCategory(event.target.value)}>
+              {CATEGORIES.map((value) => (
+                <option key={value} value={value}>
+                  {label(value)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Price unit" htmlFor="priceUnit" error={errors.priceUnit} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+            <Select id="priceUnit" value={pricing.priceUnit} onChange={(event) => setPrice({ priceUnit: event.target.value })}>
+              {UNITS.map(([value, text]) => (
+                <option key={value} value={value}>
+                  {text}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="List price (£)" htmlFor="listPrice" error={errors.listPrice} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+            <Input id="listPrice" inputMode="decimal" value={pricing.listPrice} onChange={(event) => setPrice({ listPrice: event.target.value })} placeholder="225" />
+          </Field>
+          <Field label="Site visit" htmlFor="siteVisit" error={errors.siteVisit} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+            <Select id="siteVisit" value={pricing.siteVisit} onChange={(event) => setPrice({ siteVisit: event.target.value })}>
+              <option value="NONE">No</option>
+              <option value="REQUIRED">Yes</option>
+              <option value="OPTIONAL">Optional</option>
+            </Select>
+          </Field>
+          <Field label="Revision rounds" htmlFor="revisionRounds" error={errors.revisionRounds} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+            <Input id="revisionRounds" inputMode="numeric" value={pricing.revisionRounds} onChange={(event) => setPrice({ revisionRounds: event.target.value })} />
+          </Field>
+          <Field label="Standard days" htmlFor="standardDays" error={errors.standardDays} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+            <Input id="standardDays" inputMode="numeric" value={pricing.standardDays} onChange={(event) => setPrice({ standardDays: event.target.value })} placeholder="Working days (blank = agreed)" />
+          </Field>
+          <Field label="Partner / fast-track days" htmlFor="fastTrackDays" error={errors.fastTrackDays} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+            <Input id="fastTrackDays" inputMode="numeric" value={pricing.fastTrackDays} onChange={(event) => setPrice({ fastTrackDays: event.target.value })} placeholder="0 = same day" />
+          </Field>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-4 shadow-card">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-medium text-navy">Workflow stages</h2>
+          <Button variant="ocean" size="sm" onClick={() => setStages((current) => [...current, newStage()])}>
+            <Plus aria-hidden />
+            Add stage
+          </Button>
+        </div>
+        {errors.stages ? <p className="mt-2 text-xs text-danger">{errors.stages}</p> : null}
+        <ol className="mt-4 grid gap-3">
+          {stages.map((stage, index) => (
+            <li key={stage.key} className="grid items-end gap-3 rounded-xl border border-line-soft p-3 sm:grid-cols-[1fr_150px_100px_170px_auto]">
+              <Field label={`Stage ${index + 1}`} htmlFor={`${stage.key}-name`} error={errors[`stages.${index}.name`]} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+                <Input id={`${stage.key}-name`} value={stage.name} onChange={(event) => updateStage(stage.key, { name: event.target.value })} />
+              </Field>
+              <Field label="Role" htmlFor={`${stage.key}-role`} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+                <Select id={`${stage.key}-role`} value={stage.role} onChange={(event) => updateStage(stage.key, { role: event.target.value })}>
+                  {ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {label(role)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="SLA days" htmlFor={`${stage.key}-sla`} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+                <Input id={`${stage.key}-sla`} inputMode="numeric" value={stage.slaDays} onChange={(event) => updateStage(stage.key, { slaDays: event.target.value })} />
+              </Field>
+              <Field label="Sets status" htmlFor={`${stage.key}-status`} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+                <Select id={`${stage.key}-status`} value={stage.status} onChange={(event) => updateStage(stage.key, { status: event.target.value })}>
+                  {STATUSES.map(([value, text]) => (
+                    <option key={value} value={value}>
+                      {text}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <button type="button" aria-label={`Remove stage ${index + 1}`} onClick={() => setStages((current) => current.filter((item) => item.key !== stage.key))} className="mb-1 rounded p-2 text-navy hover:bg-canvas">
+                <Trash2 className="size-5" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="rounded-2xl bg-white p-4 shadow-card">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-medium text-navy">Deliverables</h2>
+          <Button variant="ocean" size="sm" onClick={() => setDeliverables((current) => [...current, ""])}>
+            <Plus aria-hidden />
+            Add deliverable
+          </Button>
+        </div>
+        <ul className="mt-4 grid gap-3">
+          {deliverables.map((deliverable, index) => (
+            <li key={index} className="flex items-center gap-3">
+              <Input aria-label={`Deliverable ${index + 1}`} value={deliverable} onChange={(event) => setDeliverables((current) => current.map((item, i) => (i === index ? event.target.value : item)))} />
+              <button type="button" aria-label={`Remove deliverable ${index + 1}`} onClick={() => setDeliverables((current) => current.filter((_, i) => i !== index))} className="rounded p-2 text-navy hover:bg-canvas">
+                <X className="size-5" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="flex items-center justify-between gap-6 rounded-2xl bg-white p-4 shadow-card">

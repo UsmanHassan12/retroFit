@@ -2,39 +2,50 @@ export const SERVICE_CATEGORIES = [
   { id: "assessment", label: "Assessment" },
   { id: "design", label: "Design" },
   { id: "coordination", label: "Coordination" },
-  { id: "full-package", label: "Full Package" },
+  { id: "calculations", label: "Calculations" },
+  { id: "surveys", label: "Surveys" },
   { id: "funding", label: "Funding" },
+  { id: "compliance", label: "Compliance" },
 ] as const;
 
 export type ServiceCategory = (typeof SERVICE_CATEGORIES)[number]["id"];
 
+/** List price per unit, excluding VAT. */
 export const BUDGET_RANGES = [
-  { id: "under-500", label: "Under £500", min: 0, max: 499.99 },
-  { id: "500-1000", label: "£500–£1000", min: 500, max: 1000 },
-  { id: "1000-plus", label: "£1000+", min: 1000.01, max: Number.POSITIVE_INFINITY },
+  { id: "under-100", label: "Under £100", min: 0, max: 99.99 },
+  { id: "100-300", label: "£100–£300", min: 100, max: 300 },
+  { id: "300-plus", label: "£300+", min: 300.01, max: Number.POSITIVE_INFINITY },
 ] as const;
 
 export type BudgetRange = (typeof BUDGET_RANGES)[number]["id"];
 
-export type TierId = "basic" | "standard" | "premium";
+export type PriceUnit = "PROPERTY" | "ELEMENT" | "JUNCTION" | "VISIT" | "PACKAGE";
 
-export type ServiceTier = {
-  id: TierId;
-  name: string;
-  /** Price in GBP, excluding VAT. */
-  price: number;
-  summary: string;
-  deliveryDays: number;
-  inclusions: string[];
-  /** Short feature list shown on the order review card. */
-  highlights: string[];
+/** One list price per unit; the customer's tier decides discount, speed and payment terms. */
+export type ServicePricing = {
+  unit: PriceUnit;
+  unitLabel: string;
+  unitLabelPlural: string;
+  /** GBP, excluding VAT. */
+  listPrice: number;
+  /** Quantity matters for per-element / per-junction / per-visit services. */
+  perUnit: boolean;
+  siteVisit: "NONE" | "REQUIRED" | "OPTIONAL";
+  requiresProperty: boolean;
+  revisionRounds: number;
 };
 
 export type ServiceAddOn = {
+  /** Add-on key, used in the URL (?addons=express,extra-visit:2). */
   id: string;
   name: string;
   description: string;
-  price: number;
+  kind: "PERCENT_OF_LIST" | "PER_UNIT" | "PER_MILE" | "FIXED";
+  /** GBP per unit / per mile / once; for PERCENT_OF_LIST the percentage. */
+  amount: number;
+  freeAllowance: number;
+  audience: "ALL" | "BASIC" | "PARTNER";
+  fastTrack: boolean;
   icon: "express" | "review" | "filing" | "training";
 };
 
@@ -53,6 +64,8 @@ export type Deliverable = {
 };
 
 export type Service = {
+  id: string;
+  code: string;
   slug: string;
   /** Card title on listings. */
   title: string;
@@ -62,11 +75,14 @@ export type Service = {
   intro: string;
   category: ServiceCategory;
   badge: "PAS 2035" | "Funding";
-  schemes: Array<"ECO4" | "GBIS">;
+  schemes: string[];
+  /** Basic turnaround, e.g. "5 working days after visit". */
   turnaround: string;
+  /** Premium Partner turnaround (also what Express buys), or null when there's none. */
+  fastTrackTurnaround: string | null;
   image: string;
   gallery: string[];
-  tiers: ServiceTier[];
+  pricing: ServicePricing;
   addOns: ServiceAddOn[];
   overview: { paragraphs: string[]; keyAreas: string[] };
   included: string[];

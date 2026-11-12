@@ -1,14 +1,9 @@
-import { z } from "zod";
-
 import { requireUser } from "@/server/auth/session";
-import { handle, ok, readJson } from "@/server/http";
-import { subscribe } from "@/server/services/billing";
+import { handle, ok } from "@/server/http";
+import { startSubscription } from "@/server/services/partners";
 
-const schema = z.object({ plan: z.literal("PRIORITY") });
-
-/** → { url } to Stripe Checkout (subscription mode). */
-export const POST = handle(async (request) => {
-  const user = await requireUser();
-  const { plan } = await readJson(request, schema);
-  return ok(await subscribe(user, plan));
-});
+/**
+ * Kept for old clients: the £29 Priority plan is gone. This now starts the Premium Partner
+ * subscription (same as POST /api/partner/subscription).
+ */
+export const POST = handle(async () => ok(await startSubscription(await requireUser())));

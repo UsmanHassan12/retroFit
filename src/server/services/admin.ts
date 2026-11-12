@@ -26,17 +26,20 @@ export async function adminDashboard(user: AuthUser) {
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
   const isAdmin = user.role === "ADMIN";
 
-  const [newToday, active, overdue, revenueMtd, statusGroups, completed, priority, staff, paidOrders] = await Promise.all([
+  const open = { status: { notIn: ["COMPLETED" as const, "CANCELLED" as const] } };
+  const [newToday, active, overdue, revenueMtd, healthGroups, completedCount, completed, priority, staff, paidOrders, waiting, holds] = await Promise.all([
     db.project.count({ where: { AND: [scope, { createdAt: { gte: startOfDay(now) } }] } }),
-    db.project.count({ where: { AND: [scope, { status: { notIn: ["COMPLETED", "CANCELLED"] } }] } }),
+    db.project.count({ where: { AND: [scope, open] } }),
     overdueTaskCount(user),
-    isAdmin ? db.order.aggregate({ where: { status: "PAID", paidAt: { gte: startOfMonth(now) } }, _sum: { totalPence: true } }) : null,
-    db.project.groupBy({ by: ["status"], where: scope, _count: { _all: true } }),
+    // Revenue = confirmed bookings (net of VAT), whether paid by card, credit or weekly invoice.
+    isAdmin ? db.order.aggregate({ where: { status: "CONFIRMED", confirmedAt: { gte: startOfMonth(now) } }, _sum: { netPence: true } }) : null,
+    db.project.groupBy({ by: ["health"], where: { AND: [scope, open] }, _count: { _all: true } }),
+    db.project.count({ where: { AND: [scope, { status: "COMPLETED" }] } }),
     db.project.findMany({ where: { AND: [scope, { completedAt: { not: null } }] }, select: { startedAt: true, completedAt: true }, take: 200, orderBy: { completedAt: "desc" } }),
     db.project.findMany({
-      where: { AND: [scope, { status: { notIn: ["COMPLETED", "CANCELLED"] } }, { OR: [{ hasIssues: true }, { priority: { in: ["HIGH", "QA_REJECT"] } }] }] },
+      where: { AND: [scope, open, { OR: [{ hasIssues: true }, { priority: { in: ["HIGH", "QA_REJECT"] } }, { partnerPriority: true }] }] },
       include: { property: true, coordinator: { select: { id: true, firstName: true, lastName: true, email: true, role: true, avatarUrl: true } } },
-      orderBy: [{ criticalIssue: "desc" }, { dueDate: "asc" }],
+      orderBy: [{ criticalIssue: "desc" }, { partnerPriority: "desc" }, { dueDate: { sort: "asc", nulls: "last" } }],
       take: 8,
     }),
     db.user.findMany({
@@ -48,11 +51,13 @@ export async function adminDashboard(user: AuthUser) {
       take: 8,
       orderBy: { firstName: "asc" },
     }),
-    isAdmin ? db.order.findMany({ where: { status: "PAID", paidAt: { gte: sixMonthsAgo } }, select: { paidAt: true, totalPence: true } }) : [],
+    isAdmin ? db.order.findMany({ where: { status: "CONFIRMED", confirmedAt: { gte: sixMonthsAgo } }, select: { confirmedAt: true, netPence: true } }) : [],
+    db.project.count({ where: { AND: [scope, { status: "AWAITING_INFO" }] } }),
+    isAdmin ? db.accountHold.count({ where: { liftedAt: null } }) : 0,
   ]);
 
-  const statusCounts = Object.fromEntries(statusGroups.map((group: any) => [group.status, group._count._all as number]));
-  const totalProjects = statusGroups.reduce((sum: number, group: any) => sum + group._count._all, 0);
+  const healthCounts = Object.fromEntries(healthGroups.map((group: any) => [group.health, group._count._all as number]));
+  const totalProjects = healthGroups.reduce((sum: number, group: any) => sum + group._count._all, 0) + completedCount;
   const days = completed
     .filter((project: any) => project.completedAt)
     .map((project: any) => (project.completedAt.getTime() - project.startedAt.getTime()) / 86_400_000);
@@ -60,10 +65,10 @@ export async function adminDashboard(user: AuthUser) {
 
   // Revenue per half-month for the last six months.
   const buckets: number[] = Array.from({ length: 12 }, () => 0);
-  for (const order of paidOrders as Array<{ paidAt: Date; totalPence: number }>) {
-    const monthIndex = (order.paidAt.getFullYear() - sixMonthsAgo.getFullYear()) * 12 + order.paidAt.getMonth() - sixMonthsAgo.getMonth();
-    const bucket = monthIndex * 2 + (order.paidAt.getDate() > 15 ? 1 : 0);
-    if (bucket >= 0 && bucket < buckets.length) buckets[bucket]! += order.totalPence;
+  for (const order of paidOrders as Array<{ confirmedAt: Date; netPence: number }>) {
+    const monthIndex = (order.confirmedAt.getFullYear() - sixMonthsAgo.getFullYear()) * 12 + order.confirmedAt.getMonth() - sixMonthsAgo.getMonth();
+    const bucket = monthIndex * 2 + (order.confirmedAt.getDate() > 15 ? 1 : 0);
+    if (bucket >= 0 && bucket < buckets.length) buckets[bucket]! += order.netPence;
   }
 
   return {
@@ -71,17 +76,19 @@ export async function adminDashboard(user: AuthUser) {
       newToday,
       activeProjects: active,
       overdueTasks: overdue,
-      revenueMtdPence: revenueMtd ? ((revenueMtd._sum.totalPence as number | null) ?? 0) : null,
+      revenueMtdPence: revenueMtd ? ((revenueMtd._sum.netPence as number | null) ?? 0) : null,
+      awaitingInfo: waiting,
+      accountsOnHold: holds,
       avgCompletionDays: days.length ? Math.round(days.reduce((a: number, b: number) => a + b, 0) / days.length) : null,
       compliancePercent: Math.round((compliance._avg.compliancePercent as number | null) ?? 100),
     },
     workload: staff.map((member: any) => ({ name: member.firstName as string, value: member._count.assignedTasks + member._count.coordinatedProjects })),
     projectStatus: {
       total: totalProjects,
-      onTrack: statusCounts.ON_TRACK ?? 0,
-      atRisk: statusCounts.AT_RISK ?? 0,
-      delayed: statusCounts.DELAYED ?? 0,
-      completed: statusCounts.COMPLETED ?? 0,
+      onTrack: healthCounts.ON_TRACK ?? 0,
+      atRisk: healthCounts.AT_RISK ?? 0,
+      delayed: healthCounts.DELAYED ?? 0,
+      completed: completedCount,
     },
     revenueTrend: isAdmin
       ? {
@@ -124,7 +131,9 @@ const toUserRow = (user: any) => ({
   firstName: user.firstName as string,
   lastName: user.lastName as string,
   status: user.status as string,
-  plan: user.plan as string,
+  tier: user.partnerProfile?.status === "ACTIVE" ? "PARTNER" : "BASIC",
+  partnerStatus: (user.partnerProfile?.status as string | undefined) ?? null,
+  companyName: (user.companyName as string | null) ?? null,
   canViewAllProjects: user.canViewAllProjects as boolean,
   lastLoginAt: user.lastLoginAt ? (user.lastLoginAt as Date).toISOString() : null,
   projectCount: ((user._count?.memberships ?? 0) as number) + ((user._count?.clientProjects ?? 0) as number),
@@ -147,7 +156,7 @@ export async function listUsers(input: z.input<typeof userFiltersSchema> | Recor
           }
         : {}),
     },
-    include: { _count: { select: { memberships: true, clientProjects: true } } },
+    include: { _count: { select: { memberships: true, clientProjects: true } }, partnerProfile: { select: { status: true } } },
     orderBy: [{ role: "desc" }, { firstName: "asc" }],
     take: 200,
   });
@@ -160,7 +169,7 @@ export async function listUsers(input: z.input<typeof userFiltersSchema> | Recor
 }
 
 export async function getUser(id: string) {
-  const user = await db.user.findUnique({ where: { id }, include: { _count: { select: { memberships: true, clientProjects: true } } } });
+  const user = await db.user.findUnique({ where: { id }, include: { _count: { select: { memberships: true, clientProjects: true } }, partnerProfile: { select: { status: true } } } });
   if (!user) throw notFound("User");
   return toUserRow(user);
 }
@@ -238,7 +247,7 @@ export async function updateUser(admin: AuthUser, id: string, input: z.input<typ
 
 export async function integrationStatus() {
   const [lastOrder, documents] = await Promise.all([
-    db.order.findFirst({ where: { status: "PAID" }, orderBy: { paidAt: "desc" }, select: { paidAt: true } }),
+    db.order.findFirst({ where: { status: "CONFIRMED", paidAt: { not: null } }, orderBy: { paidAt: "desc" }, select: { paidAt: true } }),
     db.document.count({ where: { status: "ACTIVE" } }),
   ]);
   return [
@@ -286,9 +295,20 @@ const SAMPLE_VARIABLES: Record<string, string> = {
   inviter_name: "Admin",
   role: "Coordinator",
   service_name: "Whole-House Retrofit Assessment",
-  tier_name: "Premium",
   order_ref: "ORD-2026-000123",
-  total: "£2,182.80",
+  total: "£270.00",
+  payment: "Paid (receipt INV-2026-0001).",
+  invoice_number: "INV-2026-0001",
+  due: "Friday 20 November, 18:00",
+  reason: "Invoice INV-2026-0001 is overdue",
+  company: "Acme Insulation Ltd",
+  user_email: "ops@acme.example",
+  discount: "10%",
+  payment_mode: "weekly invoice",
+  fee: "£199.00",
+  amount: "£500.00",
+  balance: "£730.00",
+  receipt_number: "INV-2026-0002",
   link: "https://example.com",
 };
 

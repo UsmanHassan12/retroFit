@@ -36,6 +36,11 @@ export type Project = {
   image: string;
   coordinator: Person;
   phase: { name: string; description: string; notice?: string };
+  /** Workflow status label ("Awaiting information", "In progress"…). */
+  status: string;
+  /** The service's document list with what's been uploaded (Task & Docs tab). */
+  checklist: Array<{ key: string; label: string; required: boolean; uploaded: boolean }>;
+  delivered: boolean;
   activity: ProjectActivity[];
   documents: ProjectDocument[];
   messages: ProjectMessage[];

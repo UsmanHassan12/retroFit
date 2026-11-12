@@ -13,6 +13,7 @@ import {
 } from "../auth/session";
 import { db } from "../db";
 import { appUrl } from "../env";
+import { CUSTOMER_TYPES } from "../domain";
 import { AppError, badRequest, conflict } from "../errors";
 import { sendTemplate } from "../integrations/email";
 import { audit } from "./audit";
@@ -40,6 +41,8 @@ export const registerSchema = z
     confirmPassword: z.string(),
     firstName: z.string().trim().max(60).optional(),
     lastName: z.string().trim().max(60).optional(),
+    companyName: z.string().trim().max(120).optional(),
+    customerType: z.enum(CUSTOMER_TYPES).optional(),
   })
   .refine(confirmed, mismatch);
 
@@ -84,6 +87,8 @@ export async function register(input: z.input<typeof registerSchema>) {
       passwordHash: await hashPassword(data.password),
       firstName: data.firstName || fallback.firstName,
       lastName: data.lastName || fallback.lastName,
+      companyName: data.companyName || null,
+      customerType: data.customerType ?? null,
       role: "CLIENT",
       lastLoginAt: new Date(),
     },
@@ -259,7 +264,7 @@ export async function me() {
       avatarUrl: user.avatarUrl,
       canViewAllProjects: user.canViewAllProjects,
     },
-    plan: user.plan,
+    tier: user.tier,
     impersonating: Boolean(user.impersonatorId),
     expiresAt: new Date(user.expiresAt).toISOString(),
   };

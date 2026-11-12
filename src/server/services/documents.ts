@@ -8,9 +8,10 @@ import { findAccessibleProject, isStaff } from "../auth/permissions";
 import type { AuthUser } from "../auth/session";
 import { db } from "../db";
 import { AppError, badRequest, forbidden, notFound } from "../errors";
-import { UPLOAD_RULES } from "../domain";
+import { FILE_TYPE_ALIASES, UPLOAD_RULES } from "../domain";
 import { createDownloadUrl, createUploadUrl, deleteObject, objectSize } from "../integrations/storage";
 import { toPerson } from "./projects";
+import { refreshProject } from "./workflow";
 
 /**
  * Project documents (Task & Docs tab). Upload is a three-step handshake so file bytes never
@@ -19,6 +20,8 @@ import { toPerson } from "./projects";
  *   2. PUT    <uploadUrl>           (browser → S3)
  *   3. POST   /documents/:id/confirm → verify the object exists, mark ACTIVE
  * Re-uploading a file with the same name creates the next version.
+ * An upload can satisfy one of the service's required documents (`requirementKey`); when the
+ * last required one arrives, an AWAITING_INFO project moves on by itself.
  */
 
 export const requestUploadSchema = z.object({
@@ -28,13 +31,14 @@ export const requestUploadSchema = z.object({
     .min(1)
     .max(180)
     .refine((name) => !/[\\/]/.test(name), "File names can't contain slashes."),
-  mimeType: z.enum(UPLOAD_RULES.mimeTypes as [string, ...string[]], { message: "Upload a PDF, JPEG or PNG." }),
+  mimeType: z.enum(UPLOAD_RULES.mimeTypes as [string, ...string[]], { message: "Upload a PDF, JPG, PNG, DOCX or XLSX file." }),
   sizeBytes: z
     .number()
     .int()
     .positive()
     .max(UPLOAD_RULES.maxBytes, `Files must be ${UPLOAD_RULES.maxBytes / 1024 / 1024}MB or smaller.`),
   category: z.string().trim().max(60).optional(),
+  requirementKey: z.string().trim().max(60).optional(),
 });
 
 const docInclude = { uploadedBy: { select: { id: true, firstName: true, lastName: true, email: true, role: true, avatarUrl: true } } } as const;
@@ -46,6 +50,7 @@ const toDocument = (doc: any) => ({
   sizeBytes: doc.sizeBytes as number,
   version: doc.version as number,
   category: (doc.category as string | null) ?? null,
+  requirementKey: (doc.requirementKey as string | null) ?? null,
   status: doc.status as string,
   uploadedBy: toPerson(doc.uploadedBy),
   uploadedAt: (doc.createdAt as Date).toISOString(),
@@ -72,6 +77,16 @@ export async function listDocuments(user: AuthUser, reference: string, { all = f
 export async function requestUpload(user: AuthUser, reference: string, input: z.input<typeof requestUploadSchema>) {
   const data = requestUploadSchema.parse(input);
   const project = await findAccessibleProject(user, reference);
+  let category = data.category;
+  if (data.requirementKey) {
+    const full = await db.project.findUnique({ where: { id: project.id }, select: { serviceId: true } });
+    const requirement = await db.serviceDocumentRequirement.findUnique({ where: { serviceId_key: { serviceId: full!.serviceId, key: data.requirementKey } } });
+    if (!requirement) throw badRequest("That document isn't on this service's list.");
+    const accepted = requirement.acceptedTypes.map((type: string) => FILE_TYPE_ALIASES[type.toUpperCase()] ?? type);
+    if (accepted.length && !accepted.includes(data.mimeType)) throw badRequest(`${requirement.label}: upload ${requirement.acceptedTypes.join(", ")}.`);
+    if (data.sizeBytes > requirement.maxBytes) throw badRequest(`${requirement.label}: files must be ${Math.round(requirement.maxBytes / 1024 / 1024)}MB or smaller.`);
+    category ??= requirement.label;
+  }
   const latest = await db.document.findFirst({
     where: { projectId: project.id, fileName: data.fileName, status: "ACTIVE" },
     orderBy: { version: "desc" },
@@ -90,7 +105,8 @@ export async function requestUpload(user: AuthUser, reference: string, input: z.
       sizeBytes: data.sizeBytes,
       storageKey,
       version: (latest?.version ?? 0) + 1,
-      category: data.category,
+      category,
+      requirementKey: data.requirementKey ?? null,
       status: "PENDING",
     },
     include: docInclude,
@@ -116,20 +132,22 @@ export async function confirmUpload(user: AuthUser, reference: string, documentI
   if (size > UPLOAD_RULES.maxBytes) {
     await deleteObject(document.storageKey);
     await db.document.delete({ where: { id: document.id } });
-    throw new AppError("VALIDATION_FAILED", "Files must be 10MB or smaller.");
+    throw new AppError("VALIDATION_FAILED", `Files must be ${UPLOAD_RULES.maxBytes / 1024 / 1024}MB or smaller.`);
   }
 
-  const [confirmed] = await db.$transaction([
-    db.document.update({ where: { id: document.id }, data: { status: "ACTIVE", sizeBytes: size }, include: docInclude }),
-    db.activity.create({
+  const confirmed = await db.$transaction(async (tx) => {
+    const saved = await tx.document.update({ where: { id: document.id }, data: { status: "ACTIVE", sizeBytes: size }, include: docInclude });
+    await tx.activity.create({
       data: {
         projectId: project.id,
         actorId: user.id,
         type: "document.uploaded",
         message: document.version > 1 ? `${document.fileName} updated to v${document.version}` : `${document.fileName} uploaded`,
       },
-    }),
-  ]);
+    });
+    if (document.requirementKey) await refreshProject(tx, project.id, { actorId: user.id });
+    return saved;
+  });
   return toDocument(confirmed);
 }
 
@@ -143,9 +161,12 @@ export async function getDocument(user: AuthUser, reference: string, documentId:
 export async function deleteDocument(user: AuthUser, reference: string, documentId: string) {
   const { project, document } = await accessibleDocument(user, reference, documentId);
   if (document.uploadedById !== user.id && !isStaff(user)) throw forbidden("You can only delete documents you uploaded.");
-  await db.document.delete({ where: { id: document.id } });
+  await db.$transaction(async (tx) => {
+    await tx.document.delete({ where: { id: document.id } });
+    await tx.activity.create({ data: { projectId: project.id, actorId: user.id, type: "document.deleted", message: `${document.fileName} v${document.version} deleted` } });
+    if (document.requirementKey) await refreshProject(tx, project.id, { actorId: user.id });
+  });
   await deleteObject(document.storageKey);
-  await db.activity.create({ data: { projectId: project.id, actorId: user.id, type: "document.deleted", message: `${document.fileName} v${document.version} deleted` } });
 }
 
 /** Stale PENDING uploads (never confirmed) older than a day can be purged by a cron. */

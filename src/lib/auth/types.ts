@@ -11,7 +11,8 @@ export type Session = {
   email: string;
   role: Role;
   avatarUrl: string | null;
-  plan: "free" | "priority" | "enterprise";
+  /** "basic", or "partner" while the Premium Partner account is active. */
+  tier: "basic" | "partner";
   /** True while an admin is signed in as this user. */
   impersonating: boolean;
   expiresAt: number;

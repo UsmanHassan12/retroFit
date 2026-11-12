@@ -1,9 +1,13 @@
 import { requireUser } from "@/server/auth/session";
-import { handle, ok } from "@/server/http";
-import { checkout } from "@/server/services/orders";
+import { handle, ok, readOptionalJson } from "@/server/http";
+import { checkout, checkoutSchema } from "@/server/services/orders";
 
-/** → { url } — Stripe Checkout, or straight to the confirmation page in dev without Stripe. */
-export const POST = handle<{ id: string }>(async (_request, { params }) => {
+/**
+ * Body: { method?: CARD | CREDIT | CREDIT_AND_CARD | WEEKLY_INVOICE } (defaults to the first allowed).
+ * → { url, paid } — Stripe Checkout, or the confirmation page when confirmed straight away.
+ */
+export const POST = handle<{ id: string }>(async (request, { params }) => {
   const { id } = await params;
-  return ok(await checkout(await requireUser(), id));
+  const user = await requireUser();
+  return ok(await checkout(user, id, await readOptionalJson(request, checkoutSchema)));
 });

@@ -10,7 +10,7 @@ export default async function NewServicePage() {
   await requireAdmin();
   return (
     <div className="mx-auto max-w-[1120px]">
-      <PageHeader title="Create Service" description="Add a service, its pricing tiers and deliverables." />
+      <PageHeader title="Create Service" description="Add a service with its list price, turnaround, workflow stages and deliverables." />
       <div className="mt-8">
         <ServiceForm />
       </div>

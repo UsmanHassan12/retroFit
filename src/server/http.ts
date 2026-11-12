@@ -67,6 +67,23 @@ export function readQuery(request: Request): Record<string, string> {
   return record;
 }
 
+/** Best-effort client IP (behind Vercel / a proxy), stored with consents and signatures. */
+export function clientIp(request: Request) {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null;
+}
+
+/** Optional JSON body: an empty body parses as {}. */
+export async function readOptionalJson<S extends z.ZodType>(request: Request, schema: S): Promise<z.output<S>> {
+  const text = await request.text();
+  if (!text.trim()) return schema.parse({});
+  try {
+    return schema.parse(JSON.parse(text));
+  } catch (error) {
+    if (error instanceof SyntaxError) throw badRequest("Request body must be valid JSON.");
+    throw error;
+  }
+}
+
 /** First message per field, keyed by dotted path. */
 export function fieldErrors(error: z.ZodError) {
   const result: Record<string, string> = {};

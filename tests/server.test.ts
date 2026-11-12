@@ -1,5 +1,5 @@
 /**
- * Unit tests for the pure backend pieces (pricing, JWT sessions, password hashing, templates).
+ * Unit tests for auth and templates. Commercial rules are covered in tests/rules.test.ts.
  * Run: npm test   (uses Node's built-in test runner through tsx)
  */
 import assert from "node:assert/strict";
@@ -7,40 +7,7 @@ import { test } from "node:test";
 
 import { signJwt, verifyJwt } from "../src/server/auth/jwt";
 import { hashPassword, hashToken, createToken, PASSWORD_RULES, verifyPassword } from "../src/server/auth/password";
-import { priceOrder } from "../src/server/services/pricing";
 import { renderTemplate } from "../src/server/integrations/template";
-
-test("pricing: README worked example (£1,450 + £369 add-ons)", () => {
-  const price = priceOrder({ basePence: 145_000, addonPence: [24_900, 12_000] });
-  assert.equal(price.subtotalPence, 181_900);
-  assert.equal(price.vatPence, 36_380);
-  assert.equal(price.totalPence, 218_280);
-  assert.equal(price.discountSource, "NONE");
-});
-
-test("pricing: discount code applies before VAT", () => {
-  const price = priceOrder({ basePence: 100_000, addonPence: [], codePercent: 10 });
-  assert.equal(price.discountPence, 10_000);
-  assert.equal(price.vatPence, 18_000);
-  assert.equal(price.totalPence, 108_000);
-  assert.equal(price.discountSource, "CODE");
-});
-
-test("pricing: Priority plan 15% and a code never stack — the larger wins", () => {
-  const planWins = priceOrder({ basePence: 100_000, addonPence: [], codePercent: 10, plan: "PRIORITY" });
-  assert.equal(planWins.discountPercent, 15);
-  assert.equal(planWins.discountSource, "PLAN");
-  const codeWins = priceOrder({ basePence: 100_000, addonPence: [], codePercent: 20, plan: "PRIORITY" });
-  assert.equal(codeWins.discountPercent, 20);
-  assert.equal(codeWins.discountSource, "CODE");
-});
-
-test("pricing: pennies round half-up", () => {
-  const price = priceOrder({ basePence: 333, addonPence: [], codePercent: 10 });
-  assert.equal(price.discountPence, 33);
-  assert.equal(price.vatPence, 60); // 20% of 300
-  assert.equal(price.totalPence, 360);
-});
 
 const SECRET = "x".repeat(40);
 

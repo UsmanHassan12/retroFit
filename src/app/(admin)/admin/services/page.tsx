@@ -20,7 +20,7 @@ export default async function AdminServicesPage() {
     <div className="mx-auto max-w-[1120px]">
       <PageHeader
         title="Services Management"
-        description="Add and edit services, pricing tiers and add-ons."
+        description="Services, list prices, turnaround and workflow stages. Prices are placeholders until StepSoft confirms."
         actions={
           <ButtonLink href="/admin/services/new" size="lg" className="text-sm">
             <Plus aria-hidden />
@@ -33,8 +33,9 @@ export default async function AdminServicesPage() {
           <THead>
             <tr>
               <TH>Service Title</TH>
-              <TH>From Price</TH>
-              <TH>Working Days</TH>
+              <TH>Code</TH>
+              <TH>List Price</TH>
+              <TH>Turnaround (Basic / Partner)</TH>
               <TH>Last Updated</TH>
               <TH>Deliverables</TH>
               <TH>Orders</TH>
@@ -50,8 +51,14 @@ export default async function AdminServicesPage() {
                     <ExternalLink className="size-3.5 text-faint" aria-label="(opens storefront page)" />
                   </Link>
                 </TD>
-                <TD>{formatPrice(service.fromPricePence / 100)}</TD>
-                <TD>{Math.min(...service.tiers.map((tier: { deliveryDays: number }) => tier.deliveryDays))}</TD>
+                <TD>{service.code}</TD>
+                <TD>
+                  {formatPrice(service.pricing.listPricePence / 100)} <span className="text-xs text-muted">/ {service.pricing.unitLabel}</span>
+                </TD>
+                <TD className="text-sm">
+                  {service.turnaround}
+                  {service.fastTrackTurnaround ? <span className="block text-xs text-muted">{service.fastTrackTurnaround}</span> : null}
+                </TD>
                 <TD>{formatRelative(service.updatedAt)}</TD>
                 <TD>{service.deliverableCount}</TD>
                 <TD>{service.orders}</TD>

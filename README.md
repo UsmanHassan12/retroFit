@@ -25,7 +25,7 @@ Prisma reads `.env` (not `.env.local`), so keep `DATABASE_URL` in `.env`.
 | `npm run build`      | Production build                                     |
 | `npm run lint`       | ESLint (next/core-web-vitals)                        |
 | `npm run typecheck`  | `tsc --noEmit`                                       |
-| `npm test`           | Unit tests: pricing, JWT, passwords, email templates |
+| `npm test`           | Unit tests: pricing, UK calendar, billing weeks, conditions, workflow, CSV, JWT, passwords |
 | `npm run db:migrate` | Create / apply a migration in development            |
 | `npm run db:deploy`  | Apply migrations in production                       |
 | `npm run db:seed`    | Reset and load demo data                             |
@@ -36,11 +36,20 @@ Prisma reads `.env` (not `.env.local`), so keep `DATABASE_URL` in `.env`.
 | Who | Email | Password |
 | --- | --- | --- |
 | Admin | `admin@retrofitportal.co.uk` (or `SEED_ADMIN_EMAIL`) | `Admin123!` (or `SEED_ADMIN_PASSWORD`) |
-| Client | `sarah.jenkins@example.com` (owns RET-2026-0042 + 6 more) | `Retrofit123!` |
+| Basic customer | `sarah.jenkins@example.com` (owns RET-2026-0042 + 4 more) | `Retrofit123!` |
+| Premium Partner (weekly invoice) | `ops@acme-insulation.example` | `Retrofit123!` |
+| Premium Partner (account credit) | `retrofit@northern-homes.example` | `Retrofit123!` |
+| Partner applicant | `hello@bright-lofts.example` | `Retrofit123!` |
 | Coordinator | `john.hopkins@retrofitportal.co.uk` | `Retrofit123!` |
 | Assessor / designers | `mike.ross@…`, `jane.doe@…`, `rob.clarke@…`, `marie.dubois@…`, `aron.patel@…` | `Retrofit123!` |
 
-Discount codes: `RETRO2024` / `RETRO2026` (10%), `WELCOME5` (5%). Sarah is on the Priority plan, so she already gets 15% off and codes below that don't apply.
+Discount codes: `RETRO2026` (10%), `WELCOME5` (5%). A partner discount and a code never stack (the larger wins).
+
+### Commercial rules
+
+Services, prices, tiers, discounts, turnaround, workflow stages, intake questions, required documents, billing cut-offs and hold rules follow the **Draft Service Catalogue & Commercial Rules (11 Nov 2026)** and are all **data** (database rows and the `Setting` table), not code. Every figure is a placeholder until StepSoft confirms; change them from the admin API (`/api/admin/services`, `/api/admin/settings/commercial`…) or in `prisma/data/catalogue.ts` before seeding. Details in [`docs/API.md`](docs/API.md#commercial-rules-draft-catalogue-11-nov-2026).
+
+The weekly billing job (`/api/cron/billing`, protected by `CRON_SECRET`) should run hourly; `vercel.json` schedules it on Vercel.
 
 ### Running without third-party keys
 
@@ -55,8 +64,8 @@ Discount codes: `RETRO2024` / `RETRO2026` (10%), `WELCOME5` (5%). Sarah is on th
 | Marketing | `/`                                            | Landing Page                                              |
 |           | `/services`                                    | Services listing (search, category and budget filters)    |
 |           | `/services/[slug]`                             | Service detail: Overview / Included / Timeline / Compliance |
-| Checkout  | `/checkout/[slug]?tier=&addons=`               | Review Order                                              |
-|           | `/checkout/[slug]/payment`                     | Complete Order (receipt)                                  |
+| Checkout  | `/checkout/[slug]?qty=&addons=`                | Review Order (priced on the server for your tier)          |
+|           | `/checkout/[slug]/payment`                     | Complete Order: property, visit slot, booking questions, payment method |
 |           | `/checkout/confirmation`                       | Order confirmed                                           |
 | Auth      | `/login`, `/signup`, `/forgot-password`        | #1 Login / Sign Up                                        |
 |           | `/reset-password?token=`, `/accept-invite?token=` | Emailed links: new password, staff invitation          |
@@ -64,7 +73,7 @@ Discount codes: `RETRO2024` / `RETRO2026` (10%), `WELCOME5` (5%). Sarah is on th
 |           | `/dashboard/projects`                          | My Projects                                               |
 |           | `/dashboard/projects/[id]` (+ `/documents`, `/messages`, `/timeline`, `/deliverables`) | Project detail tabs |
 |           | `/dashboard/profile`                           | Profile & Property                                        |
-|           | `/dashboard/billing`, `/dashboard/billing/plans` | Billing & Plans                                         |
+|           | `/dashboard/billing`, `/dashboard/billing/plans` | Billing (credit, invoices, holds) and Basic vs Premium Partner (apply, sign, subscribe) |
 | Admin     | `/admin`                                       | Admin dashboard (charts and priority queue)               |
 |           | `/admin/projects`, `/admin/projects/[id]`      | Projects directory and task board                         |
 |           | `/admin/services`, `/admin/services/new`       | Services management                                       |
@@ -76,7 +85,8 @@ Discount codes: `RETRO2024` / `RETRO2026` (10%), `WELCOME5` (5%). Sarah is on th
 ```
 prisma/
 ├─ schema.prisma             # Data model (users, catalogue, orders, projects, tasks, docs, chat…)
-└─ seed.ts                   # Demo data matching the Figma screens
+├─ data/catalogue.ts         # The 11 StepSoft services, stages, questions, documents, bundle, bank holidays
+└─ seed.ts                   # Loads the catalogue + settings + demo accounts and projects
 src/
 ├─ app/                      # Routing only. Thin pages that compose features.
 │  ├─ (marketing)/           # Public site + checkout
@@ -85,11 +95,12 @@ src/
 │  ├─ (admin)/admin/         # Staff console (requireStaff / requireAdmin)
 │  └─ api/                   # JSON API — thin route handlers over src/server/services
 ├─ server/                   # Backend (server-only)
-│  ├─ db.ts  env.ts  http.ts  errors.ts  domain.ts
+│  ├─ db.ts  env.ts  http.ts  errors.ts  domain.ts  settings-schema.ts
 │  ├─ auth/                  # jwt.ts (HS256), password.ts (scrypt), session.ts, permissions.ts
 │  ├─ integrations/          # stripe.ts, storage.ts (S3 / local), email.ts (SendGrid / console)
-│  └─ services/              # Business logic: auth, catalog, orders, pricing, projects, tasks,
-│                            # documents, messages, deliverables, account, billing, admin
+│  ├─ rules/                 # Pure, unit-tested rules: pricing, calendar, conditions, workflow, csv
+│  └─ services/              # Business logic: catalog, intake, orders, workflow, projects, partners,
+│                            # credit, holds, invoices, billing, billing-cycle, availability, settings…
 ├─ features/                 # UI modules: components + queries.ts (adapters) + actions.ts
 ├─ components/               # Design system: brand, ui, layout, dashboard
 ├─ lib/                      # utils, formatting, auth guards, browser API client
@@ -112,8 +123,8 @@ The full API reference is in [`docs/API.md`](docs/API.md).
 ## Deploying
 
 1. Provision Postgres 16 and set `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`.
-2. Set Stripe (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRIORITY`), S3 (`S3_BUCKET`, `AWS_REGION`, credentials) and SendGrid (`SENDGRID_API_KEY`, `EMAIL_FROM`).
-3. `npm ci && npm run db:deploy && npm run build && npm start`.
+2. Set Stripe (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`), S3 (`S3_BUCKET`, `AWS_REGION`, credentials), SendGrid (`SENDGRID_API_KEY`, `EMAIL_FROM`) and `CRON_SECRET`.
+3. `npm ci && npm run db:deploy && npm run build && npm start`, and schedule `GET /api/cron/billing` hourly with `Authorization: Bearer $CRON_SECRET`.
 4. Point a Stripe webhook at `https://<your-domain>/api/webhooks/stripe` with `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `charge.refunded`.
 
 ## Brand assets

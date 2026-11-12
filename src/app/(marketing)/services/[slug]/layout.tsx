@@ -11,7 +11,7 @@ import {
 } from "@/features/services/components/detail-panels";
 import { PricingPanel } from "@/features/services/components/pricing-panel";
 import { ServiceGallery } from "@/features/services/components/service-gallery";
-import { getServiceBySlug, startingPrice } from "@/features/services/queries";
+import { getBuyerPricing, getServiceBySlug, startingPrice } from "@/features/services/queries";
 import { siteConfig } from "@/lib/site";
 
 type Params = { slug: string };
@@ -36,6 +36,7 @@ export default async function ServiceDetailLayout({
   const service = await getServiceBySlug(slug);
   if (!service) notFound();
 
+  const buyer = await getBuyerPricing(service.id);
   const base = `/services/${service.slug}`;
   const jsonLd = {
     "@context": "https://schema.org",
@@ -45,15 +46,17 @@ export default async function ServiceDetailLayout({
     provider: { "@type": "Organization", name: siteConfig.name },
     areaServed: "GB",
     offers: {
-      "@type": "AggregateOffer",
+      "@type": "Offer",
       priceCurrency: "GBP",
-      lowPrice: startingPrice(service),
-      highPrice: Math.max(...service.tiers.map((tier) => tier.price)),
+      price: startingPrice(service),
+      priceSpecification: { "@type": "UnitPriceSpecification", price: startingPrice(service), priceCurrency: "GBP", unitText: service.pricing.unitLabel, valueAddedTaxIncluded: false },
     },
   };
 
   return (
     <>
+      {/* The tab page's scroll anchor: first in the DOM so navigation lands at the top. */}
+      {children}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <BlueprintSection innerClassName="px-4 py-16 text-center sm:py-[70px]">
@@ -71,7 +74,7 @@ export default async function ServiceDetailLayout({
         <div className="grid items-start gap-6 lg:grid-cols-[690px_1fr] lg:gap-5">
           <ServiceGallery images={service.gallery} title={service.headline} />
           <div className="lg:sticky lg:top-32">
-            <PricingPanel service={service} />
+            <PricingPanel service={service} buyer={buyer} />
           </div>
         </div>
       </BlueprintSection>
@@ -86,7 +89,6 @@ export default async function ServiceDetailLayout({
             { href: `${base}/compliance`, label: "Compliance", content: <CompliancePanel service={service} /> },
           ]}
         />
-        {children}
       </BlueprintSection>
     </>
   );

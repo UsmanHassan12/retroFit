@@ -1,7 +1,7 @@
 import "server-only";
 
 import { requireStaffUser, requireAdminUser } from "@/server/auth/session";
-import { TASK_COLUMN_LABELS } from "@/server/domain";
+import { PROJECT_STATUS_LABELS, TASK_COLUMN_LABELS } from "@/server/domain";
 import * as admin from "@/server/services/admin";
 import { listServicesForAdmin } from "@/server/services/catalog";
 import { adminDirectory, getProject, listStaff } from "@/server/services/projects";
@@ -10,13 +10,9 @@ import { getBoard } from "@/server/services/tasks";
 /** Admin console queries: adapters over the server services, scoped to the signed-in staff member. */
 
 export const PRIORITY_LABELS: Record<string, string> = { LOW: "Low", MEDIUM: "Medium", HIGH: "High", QA_REJECT: "QA Reject" };
-export const STATUS_LABELS: Record<string, string> = {
-  ON_TRACK: "On Track",
-  AT_RISK: "At Risk",
-  DELAYED: "Delayed",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-};
+export const HEALTH_LABELS: Record<string, string> = { ON_TRACK: "On Track", AT_RISK: "At Risk", DELAYED: "Delayed" };
+/** Health and workflow status labels together (directory filters, badges). */
+export const STATUS_LABELS: Record<string, string> = { ...HEALTH_LABELS, ...PROJECT_STATUS_LABELS };
 
 export async function getAdminDashboard() {
   const user = await requireStaffUser();

@@ -6,7 +6,7 @@ import { cache } from "react";
 import { db } from "../db";
 import { env, isProduction } from "../env";
 import { forbidden, unauthenticated } from "../errors";
-import { isStaffRole, type Plan, type Role } from "../domain";
+import { isStaffRole, type CustomerTier, type Role } from "../domain";
 import { signJwt, verifyJwt } from "./jwt";
 
 export const SESSION_COOKIE = "rp_session";
@@ -21,7 +21,8 @@ export type AuthUser = {
   lastName: string;
   name: string;
   role: Role;
-  plan: Plan;
+  /** BASIC, or PARTNER while the user's Premium Partner profile is ACTIVE. */
+  tier: CustomerTier;
   avatarUrl: string | null;
   canViewAllProjects: boolean;
   /** Set while an admin is impersonating this user. */
@@ -35,8 +36,8 @@ const userSelect = {
   firstName: true,
   lastName: true,
   role: true,
-  plan: true,
   avatarUrl: true,
+  partnerProfile: { select: { status: true } },
   status: true,
   canViewAllProjects: true,
   sessionVersion: true,
@@ -61,7 +62,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
     lastName: user.lastName,
     name: displayName(user),
     role: user.role as Role,
-    plan: user.plan as Plan,
+    tier: user.partnerProfile?.status === "ACTIVE" ? "PARTNER" : "BASIC",
     avatarUrl: user.avatarUrl,
     canViewAllProjects: user.canViewAllProjects,
     impersonatorId: claims.imp ?? null,

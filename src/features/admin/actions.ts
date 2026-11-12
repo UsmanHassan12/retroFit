@@ -11,7 +11,7 @@ import { fieldErrors, messageFor } from "@/server/http";
 import * as admin from "@/server/services/admin";
 import { impersonate } from "@/server/services/auth";
 import { createService, patchService } from "@/server/services/catalog";
-import { updateProject } from "@/server/services/projects";
+import { advanceStage, updateProject } from "@/server/services/projects";
 
 /**
  * Admin mutations. Each action re-checks the caller's role on the server (never rely on the
@@ -31,38 +31,60 @@ function failure(error: unknown, fallback = "Please fix the highlighted fields."
 // ─── Services ───────────────────────────────────────────────────────────────
 
 export type ServiceFormInput = {
+  code: string;
   title: string;
   description: string;
+  category: string;
   active: boolean;
   imageUrl?: string;
-  tiers: { name: string; price: string; days: string; deliverables: string[] }[];
+  priceUnit: string;
+  listPrice: string;
+  siteVisit: string;
+  standardDays: string;
+  fastTrackDays: string;
+  revisionRounds: string;
+  stages: { name: string; role: string; slaDays: string; status: string }[];
+  deliverables: string[];
 };
 
-/** "Add New Service" form → catalogue. Prices arrive in pounds and are stored in pence. */
+const days = (value: string) => (value.trim() === "" ? null : Math.max(0, Math.round(Number(value))));
+
+/**
+ * "Add New Service" form → catalogue. Prices arrive in pounds and are stored in pence.
+ * Questions, document lists and add-ons are edited through the API (PUT /api/admin/services/:id).
+ */
 export async function saveService(input: ServiceFormInput): Promise<FormState> {
   try {
     const user = await requireAdminUser();
     await createService(user.id, {
+      code: input.code,
       title: input.title,
       summary: input.description,
+      category: input.category as never,
       active: input.active,
       ...(input.imageUrl ? { imageUrl: input.imageUrl, gallery: [input.imageUrl] } : {}),
-      tiers: input.tiers.map((tier) => ({
-        name: tier.name,
-        pricePence: Math.round(Number(tier.price) * 100) || 0,
-        deliveryDays: Math.round(Number(tier.days)) || 0,
-        deliverables: tier.deliverables,
+      priceUnit: input.priceUnit as never,
+      listPricePence: Math.round(Number(input.listPrice) * 100) || 0,
+      siteVisit: input.siteVisit as never,
+      standardDays: days(input.standardDays),
+      fastTrackDays: days(input.fastTrackDays),
+      revisionRounds: Math.round(Number(input.revisionRounds)) || 0,
+      stages: input.stages.map((stage) => ({
+        name: stage.name,
+        defaultRole: stage.role as never,
+        slaDays: days(stage.slaDays),
+        projectStatus: (stage.status || null) as never,
+        boardColumn: ({ ASSESSOR: "ASSESSMENT", DESIGNER: "DESIGN", COORDINATOR: "COORDINATION", ADMIN: "BACKLOG" } as Record<string, string>)[stage.role] as never,
       })),
+      serviceDeliverables: input.deliverables.filter(Boolean).map((name) => ({ name })),
+      included: input.deliverables.filter(Boolean),
     });
   } catch (error) {
     const state = failure(error);
-    // Map server field names back to the form's (pricePence → price, deliveryDays → days, summary → description).
+    // Map server field names back to the form's (listPricePence → listPrice, summary → description).
     if (state.errors) {
       state.errors = Object.fromEntries(
-        Object.entries(state.errors).map(([key, value]) => [
-          key.replace(/\.pricePence$/, ".price").replace(/\.deliveryDays$/, ".days").replace(/^summary$/, "description"),
-          value,
-        ]),
+        Object.entries(state.errors).map(([key, value]) => [key.replace(/^listPricePence$/, "listPrice").replace(/^summary$/, "description").replace(/^serviceDeliverables/, "deliverables"), value]),
       );
     }
     return state;
@@ -146,9 +168,13 @@ export async function updateProjectAction(reference: string, _prev: FormState, f
     const coordinatorId = value("coordinatorId");
     const due = value("dueDate");
     const issue = value("issueSummary")?.trim();
+    // Stage first: it may move the status itself.
+    const stage = value("stage");
+    if (stage !== undefined && stage !== value("originalStage")) await advanceStage(user, reference, { position: Number(stage) });
+    const status = value("status");
     await updateProject(user, reference, {
-      phase: value("phase") as never,
-      status: value("status") as never,
+      ...(status && status !== value("originalStatus") ? { status: status as never } : {}),
+      health: value("health") as never,
       priority: value("priority") as never,
       ...(due !== undefined ? { dueDate: due ? new Date(due) : null } : {}),
       ...(issue !== undefined ? { issueSummary: issue || null, hasIssues: Boolean(issue), criticalIssue: formData.get("criticalIssue") === "on" && Boolean(issue) } : {}),

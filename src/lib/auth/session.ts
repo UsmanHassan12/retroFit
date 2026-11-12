@@ -21,7 +21,7 @@ export const getSession = cache(async (): Promise<Session | null> => {
     email: user.email,
     role: user.role.toLowerCase() as Role,
     avatarUrl: user.avatarUrl,
-    plan: user.plan.toLowerCase() as Session["plan"],
+    tier: user.tier === "PARTNER" ? "partner" : "basic",
     impersonating: Boolean(user.impersonatorId),
     expiresAt: user.expiresAt,
   };

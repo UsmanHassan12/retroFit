@@ -9,7 +9,7 @@ export const GET = handle<Params>(async (_request, { params }) => {
   return ok(await getProject(await requireStaffUser(), ref));
 });
 
-/** Phase changes update milestones and email the client. Team changes need COORDINATOR or ADMIN. */
+/** Status (state machine; `force` for admins), health, priority, notes, team. Status changes email the client. */
 export const PATCH = handle<Params>(async (request, { params }) => {
   const { ref } = await params;
   const user = await requireStaffUser();

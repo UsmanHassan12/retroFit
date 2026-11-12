@@ -17,7 +17,7 @@ export const GET = handle<Params>(async (_request, { params }) => {
   return ok(await getServiceForAdmin(id));
 });
 
-/** Full replace (tiers / add-ons / milestones included). */
+/** Full replace: pricing, turnaround, stages, add-ons, documents, questions and deliverables. */
 export const PUT = handle<Params>(async (request, { params }) => {
   const { id } = await params;
   const admin = await requireAdminUser();

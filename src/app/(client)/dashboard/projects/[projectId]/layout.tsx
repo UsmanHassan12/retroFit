@@ -33,6 +33,8 @@ export default async function ProjectLayout({
 
   return (
     <div className="mx-auto max-w-[1120px]">
+      {/* The tab page's scroll anchor: first in the DOM so navigation lands at the top. */}
+      {children}
       <ProjectHeader project={project} />
       <div className="mt-9">
         <UrlTabs
@@ -58,7 +60,6 @@ export default async function ProjectLayout({
           ]}
         />
       </div>
-      {children}
     </div>
   );
 }

@@ -17,8 +17,6 @@ import {
   type ProjectDetailDto,
   type ProjectSummaryDto,
 } from "@/server/services/projects";
-import type { ProjectPhase } from "@/server/domain";
-
 import type { Person, Project, ProjectStage } from "./types";
 
 /**
@@ -28,16 +26,18 @@ import type { Person, Project, ProjectStage } from "./types";
 
 export type ProjectFilter = "all" | "active" | "completed";
 
-const STAGE: Record<ProjectPhase, ProjectStage> = {
-  PURCHASED: "Assessment",
+/** Broad stage for the client cards and filters, from the service category. */
+const CATEGORY_STAGE: Record<string, ProjectStage> = {
   ASSESSMENT: "Assessment",
-  SURVEY: "Assessment",
+  SURVEYS: "Assessment",
   DESIGN: "Design",
+  CALCULATIONS: "Design",
   COORDINATION: "Coordination",
-  INSTALLATION: "Installation",
-  QA: "Installation",
-  COMPLETED: "Completed",
+  FUNDING: "Coordination",
+  COMPLIANCE: "Installation",
 };
+const stageOf = (project: ProjectSummaryDto): ProjectStage =>
+  project.status === "COMPLETED" || project.status === "CANCELLED" ? "Completed" : (CATEGORY_STAGE[project.service.category] ?? "Assessment");
 
 const ROLE_LABEL: Record<string, string> = {
   CLIENT: "Client",
@@ -63,11 +63,14 @@ function toProjectView(project: ProjectSummaryDto): Project {
       postcode: project.property?.postcode ?? "",
     },
     scheme: project.scheme === "ECO4" || project.scheme === "GBIS" ? project.scheme : null,
-    stage: STAGE[project.phase],
+    stage: stageOf(project),
     progress: project.progress,
     image: project.imageUrl,
     coordinator: toPersonView(project.coordinator),
     phase: { name: project.phaseLabel, description: "" },
+    status: project.statusLabel,
+    checklist: [],
+    delivered: project.status === "DELIVERED",
     activity: [],
     documents: [],
     messages: [],
@@ -106,9 +109,10 @@ export const getProject = cache(async (reference: string): Promise<Project | und
     ...toProjectView(detail),
     phase: {
       name: detail.phaseLabel,
-      description: detail.phaseDescription ?? "Your project team is working on this phase. We’ll update you here as it progresses.",
-      notice: detail.phaseNotice ?? undefined,
+      description: detail.phaseDescription ?? "Your project team is working on this stage. We’ll update you here as it progresses.",
+      notice: missingNotice(detail) ?? detail.phaseNotice ?? undefined,
     },
+    checklist: detail.documentChecklist.map((item: { key: string; label: string; required: boolean; uploaded: boolean }) => ({ key: item.key, label: item.label, required: item.required, uploaded: item.uploaded })),
     activity: detail.activity.map((item) => ({ id: item.id, title: item.message, actor: item.actor?.name ?? "Retrofit Portal", at: formatRelative(item.at) })),
     documents: documents.map((doc) => ({
       id: doc.id,
@@ -124,10 +128,8 @@ export const getProject = cache(async (reference: string): Promise<Project | und
       sentAt: message.sentAt,
       mine: message.mine,
     })),
-    // The client timeline hides the internal QA step.
-    milestones: detail.milestones
-      .filter((milestone) => milestone.phase !== "QA")
-      .map((milestone) => ({
+    // getProject already hides stages that aren't client-visible.
+    milestones: detail.milestones.map((milestone) => ({
         title: milestone.title,
         date: milestone.completedAt ? formatShortDate(milestone.completedAt) : undefined,
         status: milestone.status.toLowerCase() as "done" | "current" | "upcoming",
@@ -149,6 +151,15 @@ export const getProject = cache(async (reference: string): Promise<Project | und
     })),
   };
 });
+
+/** "We still need: …" while a project waits for the client. */
+function missingNotice(detail: ProjectDetailDto) {
+  if (detail.status !== "AWAITING_INFO") return null;
+  const items = [...detail.missing.answers.map((item) => item.label), ...detail.missing.documents.map((item) => item.label)];
+  if (!items.length && detail.service && !detail.nextVisit) return "We need to agree a date for the site visit. Your coordinator will contact you, or reply in Messages with dates that suit you.";
+  if (!items.length) return null;
+  return `We still need: ${items.slice(0, 5).join(", ")}${items.length > 5 ? "…" : ""}. Upload documents in Task & Docs.`;
+}
 
 export async function getClientOverview() {
   const user = await requireUser();

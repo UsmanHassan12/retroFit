@@ -19,6 +19,12 @@ const STATUSES = [
   { value: "ON_TRACK", label: "On Track" },
   { value: "AT_RISK", label: "At Risk" },
   { value: "DELAYED", label: "Delayed" },
+  { value: "AWAITING_INFO", label: "Awaiting information" },
+  { value: "SCHEDULED", label: "Visit scheduled" },
+  { value: "IN_PROGRESS", label: "In progress" },
+  { value: "IN_QA", label: "Quality check" },
+  { value: "DELIVERED", label: "Delivered" },
+  { value: "ON_HOLD", label: "On hold" },
   { value: "completed", label: "Completed" },
 ];
 
@@ -162,7 +168,7 @@ export default async function AdminProjectsPage({
           </THead>
           <TBody>
             {projects.map((project) => {
-              const late = project.status === "DELAYED" || project.status === "AT_RISK";
+              const late = project.health === "DELAYED" || project.health === "AT_RISK" || project.status === "ON_HOLD";
               const verified = Boolean(project.property?.verified);
               return (
                 <TR key={project.reference}>
@@ -190,7 +196,9 @@ export default async function AdminProjectsPage({
                   <TD>
                     <AvatarStack people={project.team.map((member) => ({ name: member.name, src: member.avatarUrl ?? undefined }))} max={2} />
                   </TD>
-                  <TD className={cn("whitespace-nowrap", late ? "text-danger" : "text-brand")}>{STATUS_LABELS[project.status] ?? project.status}</TD>
+                  <TD className={cn("whitespace-nowrap", late ? "text-danger" : "text-brand")}>{project.statusLabel}
+                    {project.health !== "ON_TRACK" ? <span className="block text-xs">{STATUS_LABELS[project.health] ?? project.health}</span> : null}
+                  </TD>
                   <TD className="whitespace-nowrap">{project.dueDate ? formatDate(project.dueDate) : "—"}</TD>
                   <TD>
                     <Link href={`/admin/projects/${project.reference}`} className={buttonVariants({ variant: "ocean", size: "sm", className: "h-[34px]" })}>

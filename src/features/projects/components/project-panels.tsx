@@ -14,7 +14,7 @@ export function ProjectOverviewPanel({ project }: { project: Project }) {
   return (
     <div className="grid gap-8">
       <section>
-        <p className="text-sm font-medium text-muted">Current Phase</p>
+        <p className="text-sm font-medium text-muted">Current stage · {project.status}</p>
         <h2 className="mt-1 text-[30px] font-semibold text-navy">{project.phase.name}</h2>
         <p className="mt-6 text-base text-muted">{project.phase.description}</p>
         {project.phase.notice ? (
@@ -77,7 +77,7 @@ export function ProjectDocumentsPanel({ project }: { project: Project }) {
           ))}
         </ul>
       </section>
-      <DocumentActions projectRef={project.id} reportHref={project.deliverables.find((item) => item.available)?.href} />
+      <DocumentActions projectRef={project.id} reportHref={project.deliverables.find((item) => item.available)?.href} checklist={project.checklist} delivered={project.delivered} />
     </div>
   );
 }

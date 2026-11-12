@@ -84,14 +84,14 @@ export default async function ClientDashboardPage() {
         </ul>
       </section>
 
-      {session.plan === "free" ? (
+      {session.tier === "basic" ? (
       <section className="mt-12 flex flex-col items-start justify-between gap-4 rounded-2xl bg-[#e6e6e6] p-5 shadow-card sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-xl font-semibold text-navy">Upgrade to Priority Support</h2>
-          <p className="mt-2 text-base text-muted">Get Priority Support for £29/mo — faster responses + 15% off</p>
+          <h2 className="text-xl font-semibold text-navy">Booking regularly? Become a Premium Partner</h2>
+          <p className="mt-2 text-base text-muted">Partner prices, fast-track turnaround, the priority queue and weekly invoicing for installers, agents and housing providers.</p>
         </div>
         <ButtonLink href="/dashboard/billing/plans" variant="brand" size="lg" className="shadow-none">
-          Upgrade Now
+          Find out more
         </ButtonLink>
       </section>
       ) : null}

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { assertStaff, findAccessibleProject, isStaff, projectScope } from "../auth/permissions";
 import type { AuthUser } from "../auth/session";
 import { db, type Tx } from "../db";
-import { notFound } from "../errors";
+import { conflict, notFound } from "../errors";
 import { TASK_COLUMN_LABELS, TASK_COLUMNS, type TaskColumn } from "../domain";
 import { toPerson } from "./projects";
 
@@ -69,6 +69,14 @@ export const updateTaskSchema = createTaskSchema
   .partial()
   .extend({ position: z.number().int().min(0).optional() });
 
+/** Work pauses while a project is on hold (account hold or client query); admins can still edit. */
+async function assertWorkAllowed(user: AuthUser, projectId: string) {
+  if (user.role === "ADMIN") return;
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { status: true } });
+  if (project?.status === "ON_HOLD") throw conflict("This project is on hold, so its tasks are paused.");
+  if (project?.status === "CANCELLED") throw conflict("This project was cancelled.");
+}
+
 async function assertAssignee(assigneeId: string | null | undefined) {
   if (!assigneeId) return;
   const assignee = await db.user.findFirst({ where: { id: assigneeId, role: { not: "CLIENT" }, status: "ACTIVE" }, select: { id: true } });
@@ -79,6 +87,7 @@ export async function createTask(user: AuthUser, reference: string, input: z.inp
   assertStaff(user);
   const data = createTaskSchema.parse(input);
   const project = await findAccessibleProject(user, reference);
+  await assertWorkAllowed(user, project.id);
   await assertAssignee(data.assigneeId);
   const task = await db.$transaction(async (tx) => {
     const position = await tx.task.count({ where: { projectId: project.id, column: data.column } });
@@ -111,6 +120,7 @@ export async function updateTask(user: AuthUser, id: string, input: z.input<type
   assertStaff(user);
   const data = updateTaskSchema.parse(input);
   const task = await accessibleTask(user, id);
+  await assertWorkAllowed(user, task.projectId);
   await assertAssignee(data.assigneeId);
   const { position, column, ...fields } = data;
 

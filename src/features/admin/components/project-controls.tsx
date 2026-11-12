@@ -13,8 +13,9 @@ type Option = { value: string; label: string };
 type ProjectControlsProps = {
   reference: string;
   values: {
-    phase: string;
+    stage: string;
     status: string;
+    health: string;
     priority: string;
     coordinatorId: string;
     dueDate: string;
@@ -22,23 +23,29 @@ type ProjectControlsProps = {
     criticalIssue: boolean;
     phaseNotice: string;
   };
-  phases: Option[];
+  stages: Option[];
   statuses: Option[];
+  healths: Option[];
   priorities: Option[];
   coordinators: Option[] | null;
 };
 
-/** Phase / status / assignment panel above the task board. Phase changes email the client. */
-export function ProjectControls({ reference, values, phases, statuses, priorities, coordinators }: ProjectControlsProps) {
+/**
+ * Stage / status / assignment panel above the task board. Moving to a stage can move the
+ * status too (e.g. "QA review" → Quality check); status changes email the client.
+ */
+export function ProjectControls({ reference, values, stages, statuses, healths, priorities, coordinators }: ProjectControlsProps) {
   const [state, action, pending] = useActionState<FormState, FormData>(updateProjectAction.bind(null, reference), {});
   const errors = state.errors ?? {};
 
   return (
     <form action={action} className="mt-8 rounded-2xl bg-white p-4 shadow-card">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Phase" htmlFor="phase" error={errors.phase} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
-          <Select id="phase" name="phase" defaultValue={values.phase}>
-            {phases.map((option) => (
+        <input type="hidden" name="originalStage" value={values.stage} />
+        <input type="hidden" name="originalStatus" value={values.status} />
+        <Field label="Stage" htmlFor="stage" error={errors.stage} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+          <Select id="stage" name="stage" defaultValue={values.stage}>
+            {stages.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -48,6 +55,15 @@ export function ProjectControls({ reference, values, phases, statuses, prioritie
         <Field label="Status" htmlFor="status" error={errors.status} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
           <Select id="status" name="status" defaultValue={values.status}>
             {statuses.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Health" htmlFor="health" error={errors.health} labelClassName="text-xs font-semibold tracking-[0.05em] uppercase">
+          <Select id="health" name="health" defaultValue={values.health}>
+            {healths.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
