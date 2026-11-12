@@ -5,6 +5,8 @@ import { clientNav } from "@/components/dashboard/nav-config";
 import { Topbar } from "@/components/dashboard/topbar";
 import { ImpersonationBanner } from "@/components/dashboard/impersonation-banner";
 import { requireSession } from "@/lib/auth/guards";
+import { requireUser } from "@/server/auth/session";
+import { listNotifications } from "@/server/services/notifications";
 
 export const metadata: Metadata = {
   title: { default: "Dashboard", template: "%s | Retrofit Portal" },
@@ -13,6 +15,7 @@ export const metadata: Metadata = {
 
 export default async function ClientDashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession("/dashboard");
+  const notifications = await listNotifications(await requireUser()).catch(() => ({ items: [], unread: 0 }));
 
   return (
     <DashboardFrame
@@ -23,6 +26,7 @@ export default async function ClientDashboardLayout({ children }: { children: Re
           user={{ name: session.name, avatar: session.avatarUrl ?? undefined }}
           searchAction="/dashboard/projects"
           searchPlaceholder="Search your projects..."
+          notifications={notifications}
           profileHref="/dashboard/profile"
         />
       }

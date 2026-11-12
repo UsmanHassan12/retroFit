@@ -40,7 +40,7 @@ export function UrlTabs({
   return (
     <div>
       <nav aria-label={label} className={cn(variant === "boxed" && "border-blueprint border pb-9")}>
-        <div className="overflow-x-auto overflow-y-hidden [scrollbar-width:none] sm:overflow-visible [&::-webkit-scrollbar]:hidden">
+        <div className="relative overflow-x-auto overflow-y-hidden [scrollbar-width:none] sm:overflow-visible [&::-webkit-scrollbar]:hidden">
           <ul
             className={cn(
               "border-blueprint flex min-w-max border-b sm:grid sm:min-w-0 sm:auto-cols-fr sm:grid-flow-col",

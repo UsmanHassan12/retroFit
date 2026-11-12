@@ -334,6 +334,7 @@ model User {
   passwordResets      PasswordResetToken[]
   invitesSent         Invite[]             @relation("InviteSender")
   auditLogs           AuditLog[]
+  notifications       Notification[]
 
   @@index([role, status])
 }
@@ -995,6 +996,7 @@ model Project {
   activities   Activity[]
   visits       Visit[]
   revisions    RevisionRequest[]
+  notifications Notification[]
 
   @@index([clientId, status])
   @@index([coordinatorId])
@@ -1083,6 +1085,31 @@ model Document {
 
   @@index([projectId, fileName])
   @@index([projectId, requirementKey])
+}
+
+/// In-app notifications (the bell). One unread notification per user, project and type is
+/// kept and updated as more events arrive ("3 new messages"), so the list doesn't flood.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  projectId String?
+  /// MESSAGE for now; DELIVERABLE, REVISION, PARTNER… can follow.
+  type      String
+  title     String
+  body      String    @default("")
+  /// Where clicking it goes (opened through /api/notifications/:id/open, which marks it read).
+  href      String
+  /// How many events this unread notification covers.
+  count     Int       @default(1)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, updatedAt])
+  @@index([userId, projectId, type, readAt])
 }
 
 model Message {

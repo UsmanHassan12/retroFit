@@ -1,13 +1,15 @@
-import { Bell, Grip, Search } from "lucide-react";
+import { Grip, Search } from "lucide-react";
 import Link from "next/link";
 
 import { Avatar } from "@/components/ui/avatar";
+
+import { NotificationBell, type BellData } from "./notification-bell";
 
 type TopbarProps = {
   user: { name: string; avatar?: string };
   searchAction: string;
   searchPlaceholder?: string;
-  hasUnread?: boolean;
+  notifications: BellData;
   profileHref: string;
 };
 
@@ -16,7 +18,7 @@ export function Topbar({
   user,
   searchAction,
   searchPlaceholder = "Search retrofit services...",
-  hasUnread = true,
+  notifications,
   profileHref,
 }: TopbarProps) {
   return (
@@ -36,10 +38,7 @@ export function Topbar({
       </form>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-        <button type="button" aria-label={hasUnread ? "Notifications (unread)" : "Notifications"} className="relative rounded-lg p-2 text-navy hover:bg-white">
-          <Bell className="size-5" aria-hidden />
-          {hasUnread ? <span className="absolute top-1.5 right-2 size-2 rounded-full bg-danger ring-2 ring-canvas" /> : null}
-        </button>
+        <NotificationBell initial={notifications} />
         <button type="button" aria-label="Apps" className="hidden rounded-lg p-2 text-navy hover:bg-white sm:block">
           <Grip className="size-5" aria-hidden />
         </button>

@@ -4,16 +4,24 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ProjectControls } from "@/features/admin/components/project-controls";
+import { ProjectWorkspace } from "@/features/admin/components/project-workspace";
 import { TaskBoard } from "@/features/admin/components/task-board";
 import { getProjectBoard, getStaffOptions, HEALTH_LABELS, PRIORITY_LABELS } from "@/features/admin/queries";
 import { requireStaff } from "@/lib/auth/guards";
 import { PRIORITIES, PROJECT_HEALTH, PROJECT_STATUS_LABELS, PROJECT_STATUSES } from "@/server/domain";
 import { isAppError } from "@/server/errors";
 
-export const metadata: Metadata = { title: "Task Board" };
+export const metadata: Metadata = { title: "Project" };
 
-export default async function AdminProjectBoardPage({ params }: { params: Promise<{ projectId: string }> }) {
+export default async function AdminProjectBoardPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ projectId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { projectId } = await params;
+  const tab = (await searchParams).tab;
   const session = await requireStaff();
 
   const data = await getProjectBoard(projectId).catch((error) => {
@@ -21,7 +29,7 @@ export default async function AdminProjectBoardPage({ params }: { params: Promis
     throw error;
   });
   if (!data) notFound();
-  const { board, project } = data;
+  const { board, project, workspace } = data;
 
   const canAssign = session.role === "admin" || session.role === "coordinator";
   const staff = canAssign ? await getStaffOptions() : [];
@@ -79,6 +87,17 @@ export default async function AdminProjectBoardPage({ params }: { params: Promis
             ? staff.filter((member) => member.role === "COORDINATOR" || member.role === "ADMIN").map((member) => ({ value: member.id, label: member.name }))
             : null
         }
+      />
+
+      <ProjectWorkspace
+        reference={project.reference}
+        initialTab={typeof tab === "string" ? tab : undefined}
+        me={workspace.me}
+        messages={workspace.messages}
+        documents={workspace.documents}
+        deliverables={workspace.deliverables}
+        revisions={workspace.revisions}
+        checklist={workspace.checklist}
       />
 
       <h2 className="mt-10 text-xl font-semibold text-navy">Task Board</h2>

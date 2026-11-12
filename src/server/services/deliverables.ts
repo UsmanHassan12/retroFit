@@ -49,7 +49,7 @@ export const deliverablePatchSchema = deliverableSchema.partial();
 
 export async function listDeliverables(user: AuthUser, reference: string) {
   const project = await findAccessibleProject(user, reference);
-  const items = await db.deliverable.findMany({ where: { projectId: project.id }, include: { versions: { orderBy: { number: "asc" } } }, orderBy: { createdAt: "asc" } });
+  const items = await db.deliverable.findMany({ where: { projectId: project.id }, include: { versions: { orderBy: { number: "asc" } } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   return items.map(toDeliverable);
 }
 

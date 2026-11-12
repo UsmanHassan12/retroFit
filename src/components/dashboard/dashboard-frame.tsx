@@ -6,6 +6,7 @@ import {
   ClipboardList,
   CreditCard,
   FileSearch,
+  Handshake,
   Home,
   LogOut,
   Menu,
@@ -32,6 +33,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   billing: CreditCard,
   services: FileSearch,
   users: Users,
+  partners: Handshake,
   settings: Settings,
 };
 

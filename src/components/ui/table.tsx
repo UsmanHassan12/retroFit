@@ -6,7 +6,9 @@ import { cn } from "@/lib/utils";
 export function Table({ className, children, ...props }: ComponentProps<"table">) {
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-card">
-      <div className="overflow-x-auto">
+      {/* `relative` keeps absolutely positioned children (sr-only labels in cells) inside the
+          scroll box; without it they escape to the page and make the whole page scroll sideways. */}
+      <div className="relative overflow-x-auto">
         <table className={cn("w-full min-w-[720px] border-collapse text-left text-sm", className)} {...props}>
           {children}
         </table>

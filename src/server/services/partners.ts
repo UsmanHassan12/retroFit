@@ -39,6 +39,7 @@ const toPartnerDto = (profile: any) => ({
   paymentMode: profile.paymentMode as (typeof PAYMENT_MODES)[number],
   creditLimitPence: (profile.creditLimitPence as number | null) ?? null,
   applicationNote: (profile.applicationNote as string | null) ?? null,
+  adminNotes: (profile.adminNotes as string | null) ?? null,
   agreement: profile.agreementSignedAt
     ? { version: profile.agreementVersion as string, signedAt: (profile.agreementSignedAt as Date).toISOString(), signedName: profile.agreementSignedName as string }
     : null,

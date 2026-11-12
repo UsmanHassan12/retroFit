@@ -11,7 +11,10 @@ import { fieldErrors, messageFor } from "@/server/http";
 import * as admin from "@/server/services/admin";
 import { impersonate } from "@/server/services/auth";
 import { createService, patchService } from "@/server/services/catalog";
-import { advanceStage, updateProject } from "@/server/services/projects";
+import { addDeliverableVersion, createDeliverable, deleteDeliverable, updateDeliverable } from "@/server/services/deliverables";
+import { deleteDocument } from "@/server/services/documents";
+import { offerTerms, setServiceDiscounts, updatePartner } from "@/server/services/partners";
+import { advanceStage, decideRevision, updateProject } from "@/server/services/projects";
 
 /**
  * Admin mutations. Each action re-checks the caller's role on the server (never rely on the
@@ -186,4 +189,189 @@ export async function updateProjectAction(reference: string, _prev: FormState, f
   }
   revalidatePath(`/admin/projects/${reference}`);
   return { ok: true, message: "Project updated." };
+}
+
+// ─── Project workspace (deliverables, documents, revisions) ─────────────────
+
+/** Refresh the staff page and the client's project pages after a workspace change. */
+function refreshProjectPages(reference: string) {
+  revalidatePath(`/admin/projects/${reference}`);
+  revalidatePath(`/dashboard/projects/${reference}`, "layout");
+}
+
+/**
+ * Issue a report to the client: the file is already uploaded to the project (browser →
+ * storage); this attaches it as the deliverable's next version and makes it downloadable.
+ */
+export async function issueDeliverableVersion(input: {
+  reference: string;
+  deliverableId: string;
+  documentId: string;
+  label?: "INITIAL" | "REVISED" | "FINAL";
+  note?: string;
+}): Promise<FormState> {
+  try {
+    const user = await requireStaffUser();
+    await addDeliverableVersion(user, input.deliverableId, { documentId: input.documentId, label: input.label, note: input.note || undefined });
+    refreshProjectPages(input.reference);
+    return { ok: true, message: "Issued. The client can download it now." };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function addProjectDeliverable(input: { reference: string; title: string; kind: "PDF" | "SPREADSHEET" | "REPORT" }): Promise<FormState> {
+  try {
+    const user = await requireStaffUser();
+    await createDeliverable(user, input.reference, { title: input.title, kind: input.kind });
+    refreshProjectPages(input.reference);
+    return { ok: true, message: "Deliverable added." };
+  } catch (error) {
+    return failure(error, "Give the deliverable a name of at least 2 characters.");
+  }
+}
+
+export async function setDeliverableStatus(input: { reference: string; deliverableId: string; status: "PENDING" | "IN_PROGRESS" }): Promise<FormState> {
+  try {
+    const user = await requireStaffUser();
+    await updateDeliverable(user, input.deliverableId, { status: input.status });
+    refreshProjectPages(input.reference);
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function removeDeliverable(input: { reference: string; deliverableId: string }): Promise<FormState> {
+  try {
+    const user = await requireStaffUser();
+    await deleteDeliverable(user, input.deliverableId);
+    refreshProjectPages(input.reference);
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function removeProjectDocument(input: { reference: string; documentId: string }): Promise<FormState> {
+  try {
+    const user = await requireStaffUser();
+    await deleteDocument(user, input.reference, input.documentId);
+    refreshProjectPages(input.reference);
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Accept (invoicing billable rounds at the given price) or decline an extra revision. */
+export async function decideRevisionRequest(input: { reference: string; revisionId: string; accept: boolean; price?: string }): Promise<FormState> {
+  try {
+    const user = await requireStaffUser();
+    const pricePence = input.price !== undefined && input.price.trim() !== "" ? Math.round(Number(input.price) * 100) : undefined;
+    if (pricePence !== undefined && (!Number.isFinite(pricePence) || pricePence < 0)) return { ok: false, message: "Enter a price in pounds, e.g. 95." };
+    await decideRevision(user, input.revisionId, { accept: input.accept, pricePence });
+    refreshProjectPages(input.reference);
+    return { ok: true, message: input.accept ? "Revision accepted. The project is back in progress." : "Revision declined." };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+// ─── Partners ───────────────────────────────────────────────────────────────
+
+const percentToBps = (value: FormDataEntryValue | null) => {
+  const text = String(value ?? "").trim();
+  if (text === "") return undefined;
+  const number = Number(text);
+  return Number.isFinite(number) ? Math.round(number * 100) : NaN;
+};
+const poundsToPence = (value: FormDataEntryValue | null) => {
+  const text = String(value ?? "").trim().replace(/[£,]/g, "");
+  if (text === "") return null;
+  const number = Number(text);
+  return Number.isFinite(number) ? Math.round(number * 100) : NaN;
+};
+
+function refreshPartnerPages(id: string) {
+  revalidatePath("/admin/partners");
+  revalidatePath(`/admin/partners/${id}`);
+}
+
+/** Read the terms fields shared by the approve and edit forms. */
+function termsFrom(formData: FormData) {
+  const discountBps = percentToBps(formData.get("discount"));
+  const creditLimitPence = poundsToPence(formData.get("creditLimit"));
+  const paymentMode = String(formData.get("paymentMode") ?? "") as "ADVANCE" | "WEEKLY";
+  const errors: Record<string, string> = {};
+  if (Number.isNaN(discountBps)) errors.discount = "Enter a percentage, e.g. 10.";
+  if (Number.isNaN(creditLimitPence)) errors.creditLimit = "Enter an amount in pounds, e.g. 5000.";
+  if (paymentMode !== "ADVANCE" && paymentMode !== "WEEKLY") errors.paymentMode = "Choose how the partner pays.";
+  return { discountBps, creditLimitPence: paymentMode === "ADVANCE" ? null : creditLimitPence, paymentMode, errors };
+}
+
+/** Approve an application with terms → OFFERED; the partner is emailed to sign and subscribe. */
+export async function approvePartner(id: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  try {
+    const user = await requireAdminUser();
+    const terms = termsFrom(formData);
+    if (Object.keys(terms.errors).length) return { ok: false, message: "Please fix the highlighted fields.", errors: terms.errors };
+    await offerTerms(user.id, id, { discountBps: terms.discountBps, paymentMode: terms.paymentMode, creditLimitPence: terms.creditLimitPence });
+    refreshPartnerPages(id);
+    return { ok: true, message: "Approved. The applicant has been emailed to sign the agreement and subscribe." };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Change terms of an offered or active partner. Applies to new bookings only. */
+export async function updatePartnerTerms(id: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  try {
+    const user = await requireAdminUser();
+    const terms = termsFrom(formData);
+    if (Object.keys(terms.errors).length) return { ok: false, message: "Please fix the highlighted fields.", errors: terms.errors };
+    await updatePartner(user.id, id, {
+      ...(terms.discountBps !== undefined ? { discountBps: terms.discountBps } : {}),
+      paymentMode: terms.paymentMode,
+      creditLimitPence: terms.creditLimitPence,
+      adminNotes: String(formData.get("adminNotes") ?? "").trim() || null,
+    });
+    refreshPartnerPages(id);
+    return { ok: true, message: "Terms saved. They apply to new bookings only." };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Reject an application, or suspend / re-activate / cancel a partner. The partner is emailed. */
+export async function setPartnerStatus(id: string, status: "REJECTED" | "SUSPENDED" | "ACTIVE" | "CANCELLED"): Promise<FormState> {
+  try {
+    const user = await requireAdminUser();
+    await updatePartner(user.id, id, { status });
+    refreshPartnerPages(id);
+    const done = { REJECTED: "Application rejected.", SUSPENDED: "Partner suspended.", ACTIVE: "Partner re-activated.", CANCELLED: "Partnership cancelled." };
+    return { ok: true, message: done[status] };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Per-service discount overrides: blank removes an override (the partner's main discount applies). */
+export async function savePartnerServiceDiscounts(id: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  try {
+    const user = await requireAdminUser();
+    const errors: Record<string, string> = {};
+    const rows = formData.getAll("serviceId").map((value) => {
+      const serviceId = String(value);
+      const bps = percentToBps(formData.get(`discount_${serviceId}`));
+      if (Number.isNaN(bps)) errors[`discount_${serviceId}`] = "Enter a percentage.";
+      return { serviceId, discountBps: bps === undefined || Number.isNaN(bps) ? null : bps };
+    });
+    if (Object.keys(errors).length) return { ok: false, message: "Enter percentages as numbers, e.g. 15.", errors };
+    await setServiceDiscounts(user.id, id, rows);
+    refreshPartnerPages(id);
+    return { ok: true, message: "Service discounts saved." };
+  } catch (error) {
+    return failure(error);
+  }
 }

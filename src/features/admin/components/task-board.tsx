@@ -96,7 +96,7 @@ export function TaskBoard({ projectRef, initialColumns }: { projectRef: string; 
           {error}
         </p>
       ) : null}
-      <div className="mt-4 grid auto-cols-[260px] grid-flow-col gap-4 overflow-x-auto pb-4 lg:auto-cols-auto lg:grid-flow-row lg:grid-cols-4">
+      <div className="mt-4 grid auto-cols-[260px] grid-flow-col relative gap-4 overflow-x-auto pb-4 lg:auto-cols-auto lg:grid-flow-row lg:grid-cols-4">
         {columns.map((column) => (
           <section
             key={column.key}
