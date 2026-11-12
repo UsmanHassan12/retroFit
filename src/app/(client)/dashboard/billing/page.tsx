@@ -190,22 +190,25 @@ export default async function BillingPage() {
                     {invoice.status}
                     {invoice.dueAt && invoice.payable ? <span className="block text-xs text-muted">due {formatDate(invoice.dueAt)}</span> : null}
                   </TD>
-                  <TD className="flex flex-wrap gap-2">
-                    <a href={invoice.viewUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ocean", size: "sm", className: "h-9 px-4" })} aria-label={`View ${invoice.number}`}>
-                      <FileText aria-hidden />
-                      View
-                    </a>
-                    {invoice.pdfUrl ? (
-                      <a href={invoice.pdfUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ocean", size: "sm", className: "h-9 px-4" })} aria-label={`Download ${invoice.number} as PDF`}>
-                        <Download aria-hidden />
-                        PDF
+                  <TD>
+                    {/* The flex row lives inside the cell: a flex <td> stops being a table cell and loses the row's vertical centring. */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a href={invoice.viewUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ocean", size: "sm", className: "h-9 px-4" })} aria-label={`View ${invoice.number}`}>
+                        <FileText aria-hidden />
+                        View
                       </a>
-                    ) : null}
-                    {invoice.payable ? (
-                      <BillingButton intent="pay" fields={{ invoiceId: invoice.id }} size="sm" className="h-9 px-4">
-                        Pay now
-                      </BillingButton>
-                    ) : null}
+                      {invoice.pdfUrl ? (
+                        <a href={invoice.pdfUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ocean", size: "sm", className: "h-9 px-4" })} aria-label={`Download ${invoice.number} as PDF`}>
+                          <Download aria-hidden />
+                          PDF
+                        </a>
+                      ) : null}
+                      {invoice.payable ? (
+                        <BillingButton intent="pay" fields={{ invoiceId: invoice.id }} size="sm" className="h-9 px-4 shadow-none">
+                          Pay now
+                        </BillingButton>
+                      ) : null}
+                    </div>
                   </TD>
                 </TR>
               ))}

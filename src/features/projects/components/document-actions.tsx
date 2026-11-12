@@ -85,7 +85,7 @@ export function DocumentActions({
   }
 
   return (
-    <div className="grid gap-4 rounded-2xl bg-white p-6 shadow-card">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 rounded-2xl bg-white p-6 shadow-card">
       <input
         ref={fileInput}
         type="file"
@@ -96,9 +96,9 @@ export function DocumentActions({
         onChange={(event) => upload(event.target.files)}
       />
       {checklist.length ? (
-        <label className="grid gap-1.5 text-sm text-navy">
+        <label className="grid min-w-0 gap-1.5 text-sm text-navy">
           <span className="text-xs font-semibold tracking-[0.05em] text-muted uppercase">This upload is</span>
-          <select value={requirementKey} onChange={(event) => setRequirementKey(event.target.value)} className="h-11 rounded-lg border border-line-soft bg-white px-3 text-sm">
+          <select value={requirementKey} onChange={(event) => setRequirementKey(event.target.value)} className="h-11 w-full min-w-0 truncate rounded-lg border border-line-soft bg-white px-3 text-sm">
             <option value="">Something else</option>
             {checklist.map((item) => (
               <option key={item.key} value={item.key}>
@@ -124,10 +124,19 @@ export function DocumentActions({
           Download Report
         </a>
       ) : (
-        <span aria-disabled="true" title="Available once your first report is delivered" className={buttonVariants({ variant: "brand", size: "lg", className: "rounded-[10px] opacity-60 shadow-none" })}>
-          <Download aria-hidden />
-          Download Report
-        </span>
+        <div className="grid gap-1.5">
+          <span
+            aria-disabled="true"
+            aria-describedby="report-pending"
+            className={buttonVariants({ variant: "ghost", size: "lg", className: "rounded-[10px] border-dashed bg-canvas text-faint aria-disabled:opacity-100" })}
+          >
+            <Download aria-hidden />
+            Download Report
+          </span>
+          <p id="report-pending" className="text-center text-xs text-faint">
+            Available once your report is delivered.
+          </p>
+        </div>
       )}
       <p role="status" className={status ? `text-sm ${status.ok ? "text-brand-700" : "text-danger"}` : "sr-only"}>
         {status?.text}
