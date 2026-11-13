@@ -278,7 +278,7 @@ export async function decideRevisionRequest(input: { reference: string; revision
   }
 }
 
-// ─── Partners ───────────────────────────────────────────────────────────────
+// ─── Partners (admin approval and management) ───────────────────────────────
 
 const percentToBps = (value: FormDataEntryValue | null) => {
   const text = String(value ?? "").trim();

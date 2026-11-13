@@ -39,7 +39,7 @@ const detailInclude = {
   deliverables: { orderBy: { position: "asc" } },
   documentRequirements: { orderBy: { position: "asc" } },
   questions: { where: { active: true }, orderBy: [{ step: "asc" }, { position: "asc" }] },
-} as const;
+} satisfies Prisma.ServiceInclude;
 
 type IconCard = { title: string; description: string; icon: string };
 

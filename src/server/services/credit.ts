@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { AuthUser } from "../auth/session";
 import { db, type Tx } from "../db";
-import { appUrl, integrations, isProduction } from "../env";
+import { appUrl, integrations, requiresIntegrations } from "../env";
 import { AppError, badRequest, conflict, notConfigured, notFound } from "../errors";
 import { sendTemplate } from "../integrations/email";
 import { requireStripe } from "../integrations/stripe";
@@ -138,7 +138,7 @@ export async function startTopup(user: AuthUser, input: z.input<typeof topupSche
   if (amountPence < settings.partner.minTopupPence) throw badRequest(`The minimum top-up is ${formatPence(settings.partner.minTopupPence)}.`);
 
   if (!integrations.stripe()) {
-    if (isProduction()) throw notConfigured("Payments are not configured.");
+    if (requiresIntegrations()) throw notConfigured("Payments are not configured.");
     await recordTopup({ userId: user.id, amountPence, via: "CARD", note: "Development top-up (no Stripe)" });
     return { url: appUrl("/dashboard/billing?topup=1"), paid: true };
   }

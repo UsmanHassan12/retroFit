@@ -29,6 +29,16 @@ const schema = z.object({
   AWS_REGION: z.string().default("eu-west-2"),
   S3_BUCKET: optional,
 
+  /**
+   * Staging / client demo on a production build: payments without Stripe succeed instantly and
+   * uploads without S3 are stored on the server's disk (lost on redeploy), exactly like local
+   * development. Never set this on the real production site.
+   */
+  DEMO_MODE: z
+    .string()
+    .optional()
+    .transform((value) => value === "true" || value === "1"),
+
   SENDGRID_API_KEY: optional,
   EMAIL_FROM: z.string().default("Retrofit Portal <no-reply@retrofitportal.co.uk>"),
 });
@@ -43,7 +53,8 @@ export function env(): Env {
     ...process.env,
     // Accept the old frontend variable names so existing .env.local files keep working.
     AUTH_SECRET: process.env.AUTH_SECRET ?? process.env.SESSION_SECRET,
-    APP_URL: process.env.APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL,
+    // On Render, RENDER_EXTERNAL_URL is the service's public address, so APP_URL can be left unset.
+    APP_URL: process.env.APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? process.env.RENDER_EXTERNAL_URL,
   });
   if (!parsed.success) {
     const problems = parsed.error.issues.map((issue) => `  • ${issue.path.join(".")}: ${issue.message}`).join("\n");
@@ -54,6 +65,12 @@ export function env(): Env {
 }
 
 export const isProduction = () => env().NODE_ENV === "production";
+
+/** Staging / demo deployment (DEMO_MODE=true): see the schema above. */
+export const isDemo = () => env().DEMO_MODE;
+
+/** Production without demo mode: payment and storage integrations must be configured. */
+export const requiresIntegrations = () => isProduction() && !isDemo();
 
 export const integrations = {
   stripe: () => Boolean(env().STRIPE_SECRET_KEY),

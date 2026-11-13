@@ -1,0 +1,40 @@
+# Render Blueprint: staging / client demo of the Retrofit Portal on the free plan.
+# Render → New → Blueprint → pick this repository. It creates the database and the web service.
+#
+# DEMO_MODE=true: card payments are simulated (no Stripe), uploads are stored on the server's
+# disk (they disappear on each redeploy), and emails are written to the logs (no SendGrid).
+# For the real production site, remove DEMO_MODE and add the Stripe, S3 and SendGrid variables.
+
+databases:
+  - name: retrofit-db
+    plan: free # expires 30 days after creation on Render's free plan
+    region: frankfurt
+    databaseName: retrofit
+    user: retrofit
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: retrofit-portal
+    runtime: node
+    plan: free # sleeps after 15 minutes without visits; the next visit takes ~1 minute to wake it
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    # Migrations run before every build so the schema always matches the code.
+    buildCommand: npm ci && npx prisma migrate deploy && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: retrofit-db
+          property: connectionString
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: DEMO_MODE
+        value: "true"

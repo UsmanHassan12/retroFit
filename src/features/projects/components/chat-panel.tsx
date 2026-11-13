@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Send } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { api } from "@/lib/api/client";
@@ -44,25 +44,35 @@ export function ChatPanel({ projectRef, initialMessages, me }: { projectRef: str
     if (list) list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
+  const fetchNew = useCallback(async () => {
+    try {
+      const query = latest ? `?after=${encodeURIComponent(latest)}` : "";
+      const { messages: fresh } = await api<{ messages: ApiMessage[] }>(`${endpoint}${query}`);
+      if (fresh.length) {
+        setMessages((current) => {
+          const known = new Set(current.map((message) => message.id));
+          return [...current, ...fresh.filter((message) => !known.has(message.id)).map(toMessage)];
+        });
+      }
+    } catch {
+      // Network hiccup: try again on the next tick.
+    }
+  }, [endpoint, latest]);
+
   // Poll for new messages; pauses while the tab is hidden.
   useEffect(() => {
-    const timer = window.setInterval(async () => {
-      if (document.visibilityState !== "visible") return;
-      try {
-        const query = latest ? `?after=${encodeURIComponent(latest)}` : "";
-        const { messages: fresh } = await api<{ messages: ApiMessage[] }>(`${endpoint}${query}`);
-        if (fresh.length) {
-          setMessages((current) => {
-            const known = new Set(current.map((message) => message.id));
-            return [...current, ...fresh.filter((message) => !known.has(message.id)).map(toMessage)];
-          });
-        }
-      } catch {
-        // Network hiccup: try again on the next tick.
-      }
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void fetchNew();
     }, POLL_MS);
     return () => window.clearInterval(timer);
-  }, [endpoint, latest]);
+  }, [fetchNew]);
+
+  // The notification bell announces when one is opened: check for new messages straight away.
+  useEffect(() => {
+    const onOpen = () => void fetchNew();
+    window.addEventListener("notification:open", onOpen);
+    return () => window.removeEventListener("notification:open", onOpen);
+  }, [fetchNew]);
 
   async function send(event: React.FormEvent) {
     event.preventDefault();

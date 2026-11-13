@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { AuthUser } from "../auth/session";
 import { db } from "../db";
-import { appUrl, integrations, isProduction } from "../env";
+import { appUrl, integrations, requiresIntegrations } from "../env";
 import { badRequest, conflict, notConfigured, notFound } from "../errors";
 import { CUSTOMER_TYPES, PARTNER_STATUSES, PAYMENT_MODES } from "../domain";
 import { sendEmail, sendTemplate } from "../integrations/email";
@@ -155,7 +155,7 @@ export async function startSubscription(user: AuthUser) {
   if (!profile.agreementSignedAt || profile.agreementVersion !== settings.partner.agreementVersion) throw conflict("Please sign the partner agreement first.");
 
   if (!integrations.stripe()) {
-    if (isProduction()) throw notConfigured("Payments are not configured.");
+    if (requiresIntegrations()) throw notConfigured("Payments are not configured.");
     await activatePartnership(user.id, { subscriptionId: null, renewsAt: new Date(Date.now() + 30 * 86_400_000), status: "active" });
     const vat = Math.round((settings.partner.subscriptionPence * settings.vat.rateBps) / 10_000);
     await db.$transaction((tx) =>

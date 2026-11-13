@@ -1,9 +1,10 @@
 import "server-only";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getSession } from "./session";
-import { isStaff, type Session } from "./types";
+import { SESSION_COOKIE, isStaff, type Session } from "./types";
 
 /**
  * Data-access-layer guards for pages and layouts. proxy.ts does a fast redirect based on the
@@ -12,7 +13,13 @@ import { isStaff, type Session } from "./types";
  */
 export async function requireSession(next?: string): Promise<Session> {
   const session = await getSession();
-  if (!session) redirect(next ? `/login?next=${encodeURIComponent(next)}` : "/login");
+  if (!session) {
+    const query = next ? `?next=${encodeURIComponent(next)}` : "";
+    // A cookie is present but doesn't match a user: clear it first (a page can't delete cookies),
+    // otherwise the proxy would keep treating the visitor as signed in.
+    if ((await cookies()).has(SESSION_COOKIE)) redirect(`/api/auth/reset-session${query}`);
+    redirect(`/login${query}`);
+  }
   return session;
 }
 

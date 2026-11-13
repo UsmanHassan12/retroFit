@@ -5,7 +5,7 @@ import { z } from "zod";
 import { isStaff } from "../auth/permissions";
 import type { AuthUser } from "../auth/session";
 import { db, type Tx } from "../db";
-import { appUrl, integrations, isProduction } from "../env";
+import { appUrl, integrations, requiresIntegrations } from "../env";
 import { AppError, conflict, notConfigured, notFound } from "../errors";
 import { INVOICE_KINDS, INVOICE_STATUSES } from "../domain";
 import { requireStripe } from "../integrations/stripe";
@@ -192,7 +192,7 @@ export async function payInvoiceCheckout(user: AuthUser, id: string, ensureCusto
   if (invoice.totalPence <= 0) throw conflict("Nothing to pay on this invoice.");
 
   if (!integrations.stripe()) {
-    if (isProduction()) throw notConfigured("Payments are not configured.");
+    if (requiresIntegrations()) throw notConfigured("Payments are not configured.");
     return { url: appUrl("/dashboard/billing?paid=1"), paid: true, devPaid: true as const };
   }
   const session = await requireStripe().checkout.sessions.create({

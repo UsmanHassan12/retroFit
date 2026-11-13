@@ -7,7 +7,7 @@ import path from "node:path";
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { appUrl, env, integrations, isProduction } from "../env";
+import { appUrl, env, integrations, requiresIntegrations } from "../env";
 import { badRequest, notConfigured } from "../errors";
 
 /**
@@ -26,7 +26,7 @@ let s3: S3Client | undefined;
 const s3Client = () => (s3 ??= new S3Client({ region: env().AWS_REGION }));
 
 function assertStorage() {
-  if (!integrations.s3() && isProduction()) throw notConfigured("File storage is not configured. Set S3_BUCKET.");
+  if (!integrations.s3() && requiresIntegrations()) throw notConfigured("File storage is not configured. Set S3_BUCKET.");
 }
 
 export async function createUploadUrl(key: string, contentType: string) {

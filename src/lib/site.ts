@@ -4,7 +4,8 @@ export const siteConfig = {
   shortName: "Retrofit",
   description:
     "Purchase PAS 2035 retrofit services online with transparent pricing, funding support and end-to-end project coordination.",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  // RENDER_EXTERNAL_URL: Render's public address (server-side only; used for metadata and links).
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? process.env.RENDER_EXTERNAL_URL ?? "http://localhost:3000",
   tagline: "A centralised digital platform designed to modernise and scale retrofit service delivery.",
   mainNav: [
     { title: "Services", href: "/services" },

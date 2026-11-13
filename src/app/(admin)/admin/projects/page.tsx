@@ -194,7 +194,7 @@ export default async function AdminProjectsPage({
                     </div>
                   </TD>
                   <TD>
-                    <AvatarStack people={project.team.map((member) => ({ name: member.name, src: member.avatarUrl ?? undefined }))} max={2} />
+                    <AvatarStack people={project.team.map((member: { name: string; avatarUrl: string | null }) => ({ name: member.name, src: member.avatarUrl ?? undefined }))} max={2} />
                   </TD>
                   <TD className={cn("whitespace-nowrap", late ? "text-danger" : "text-brand")}>{project.statusLabel}
                     {project.health !== "ON_TRACK" ? <span className="block text-xs">{STATUS_LABELS[project.health] ?? project.health}</span> : null}

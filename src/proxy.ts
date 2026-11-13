@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { SESSION_COOKIE, homeForRole, isStaff } from "@/lib/auth/types";
+import { SESSION_COOKIE, isStaff } from "@/lib/auth/types";
 import { verifyJwt } from "@/server/auth/jwt";
 
 /**
@@ -10,7 +10,6 @@ import { verifyJwt } from "@/server/auth/jwt";
  */
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/checkout"];
-const AUTH_PAGES = ["/login", "/signup"];
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
@@ -28,13 +27,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  if (AUTH_PAGES.includes(pathname) && claims) {
-    return NextResponse.redirect(new URL(homeForRole(claims.role), request.url));
-  }
+  // Signed-in visitors on /login or /signup are redirected by those pages themselves, after a
+  // database check. Doing it here from the cookie alone caused a redirect loop when the cookie
+  // was validly signed but its user no longer existed (e.g. after `prisma migrate reset`):
+  // /login → /dashboard (cookie looks fine) → /login (user not found) → /dashboard → …
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*", "/checkout/:path*", "/login", "/signup"],
+  matcher: ["/dashboard/:path*", "/admin/:path*", "/checkout/:path*"],
 };

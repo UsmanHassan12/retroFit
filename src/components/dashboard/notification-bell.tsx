@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell, MessageSquare } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatRelative } from "@/lib/format";
@@ -13,8 +14,8 @@ const POLL_MS = 30_000;
 
 /**
  * Top-bar bell. Shows the unread count, a dropdown of recent notifications, and polls for
- * new ones while the tab is visible. Each item links through /api/notifications/:id/open,
- * which marks it read and lands on the right page (e.g. the project conversation).
+ * new ones while the tab is visible. Each item is a client-side link to the page it's about
+ * (no full reload); clicking also marks it read in the background.
  */
 export function NotificationBell({ initial }: { initial: BellData }) {
   const [data, setData] = useState(initial);
@@ -68,6 +69,20 @@ export function NotificationBell({ initial }: { initial: BellData }) {
     await fetch("/api/notifications/read-all", { method: "POST", credentials: "same-origin" }).catch(() => undefined);
   }
 
+  /** Mark read straight away in the UI and in the background; the <Link> does the navigation. */
+  function markRead(item: BellNotification) {
+    setOpen(false);
+    // Lets an already-open chat fetch the new message now instead of on its next poll.
+    window.dispatchEvent(new Event("notification:open"));
+    if (item.read) return;
+    setData((current) => ({
+      unread: Math.max(0, current.unread - 1),
+      items: current.items.map((entry) => (entry.id === item.id ? { ...entry, read: true } : entry)),
+    }));
+    // keepalive lets the request finish even if the click opened a new tab or the page changes.
+    void fetch(`/api/notifications/${item.id}/open`, { method: "POST", credentials: "same-origin", keepalive: true }).catch(() => undefined);
+  }
+
   const unread = data.unread;
   const label = unread ? `Notifications, ${unread} unread` : "Notifications";
 
@@ -114,7 +129,7 @@ export function NotificationBell({ initial }: { initial: BellData }) {
             <ul className="max-h-[420px] overflow-y-auto">
               {data.items.map((item) => (
                 <li key={item.id} className="border-b border-dotted border-line last:border-0">
-                  <a href={item.href} className={cn("flex gap-3 px-4 py-3 transition-colors hover:bg-canvas", !item.read && "bg-brand-100/30")}>
+                  <Link href={item.href} onClick={() => markRead(item)} className={cn("flex gap-3 px-4 py-3 transition-colors hover:bg-canvas", !item.read && "bg-brand-100/30")}>
                     <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full", item.read ? "bg-canvas text-muted" : "bg-brand-100 text-brand-700")}>
                       <MessageSquare className="size-4" aria-hidden />
                     </span>
@@ -127,7 +142,7 @@ export function NotificationBell({ initial }: { initial: BellData }) {
                       <span className="mt-1 block text-[11px] text-faint">{formatRelative(item.at)}</span>
                     </span>
                     {!item.read ? <span aria-hidden className="mt-2 size-2 shrink-0 rounded-full bg-brand" /> : null}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>

@@ -2,7 +2,7 @@
 
 import { CircleCheck, Download, FileText, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ChatPanel } from "@/features/projects/components/chat-panel";
@@ -82,6 +82,10 @@ export function ProjectWorkspace(props: Props) {
   const issued = props.deliverables.filter((item) => item.status === "AVAILABLE").length;
   const requested = (["messages", "documents", "deliverables", "revisions"] as const).find((id) => id === props.initialTab);
   const [tab, setTab] = useState<TabId>(requested ?? (pending ? "revisions" : "messages"));
+  // Following a notification while already on this page only changes ?tab=: switch to it.
+  useEffect(() => {
+    if (requested) setTab(requested);
+  }, [requested]);
 
   const tabs: Array<{ id: TabId; label: string; count?: string; alert?: boolean }> = [
     { id: "messages", label: "Messages", count: String(props.messages.length) },

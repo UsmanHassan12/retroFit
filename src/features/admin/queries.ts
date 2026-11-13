@@ -101,7 +101,7 @@ export async function getProjectBoard(reference: string) {
         status: item.status,
         versioned: item.versioned,
         currentLabel: item.currentLabel,
-        versions: item.versions.map((version) => ({ ...version, href: `${base}/deliverables/${item.id}/download?version=${version.number}` })),
+        versions: item.versions.map((version: { number: number; label: string; note: string | null; at: string }) => ({ ...version, href: `${base}/deliverables/${item.id}/download?version=${version.number}` })),
       })),
       revisions: project.revisions,
       checklist: project.documentChecklist as Array<{ key: string; label: string; required: boolean; uploaded: boolean }>,

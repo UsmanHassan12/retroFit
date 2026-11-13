@@ -22,8 +22,8 @@ const toNotification = (row: any) => ({
   count: row.count as number,
   read: Boolean(row.readAt),
   at: (row.updatedAt as Date).toISOString(),
-  /** Opening this marks it read, then redirects to the target page. */
-  href: `/api/notifications/${row.id}/open`,
+  /** The page it's about (e.g. the project conversation). The bell marks it read, then navigates client-side. */
+  href: row.href as string,
 });
 export type NotificationDto = ReturnType<typeof toNotification>;
 

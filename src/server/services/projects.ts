@@ -165,6 +165,7 @@ export async function getProject(user: AuthUser, reference: string) {
       revisions: { orderBy: { createdAt: "desc" } },
     },
   });
+  if (!project) throw notFound("Project");
   const state = await projectState(db, id);
   const staff = isStaff(user);
   const stage = currentMilestone(project);

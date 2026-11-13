@@ -52,6 +52,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           add attributes to <body> before React hydrates. This only ignores attribute differences on
           <body> itself; mismatches inside the page are still reported. */}
       <body className="min-h-dvh" suppressHydrationWarning>
+        {process.env.DEMO_MODE === "true" ? (
+          <p className="bg-navy px-4 py-1.5 text-center text-xs text-white/85">
+            Demo site: payments are simulated and no real orders are placed.
+          </p>
+        ) : null}
         {children}
       </body>
     </html>

@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { AuthUser } from "../auth/session";
 import { displayName } from "../auth/session";
 import { db } from "../db";
-import { appUrl, integrations, isProduction } from "../env";
+import { appUrl, integrations, requiresIntegrations } from "../env";
 import { AppError, badRequest, conflict, notConfigured, notFound } from "../errors";
 import { PAYMENT_METHODS, type CustomerTier, type PaymentMethod } from "../domain";
 import { sendTemplate } from "../integrations/email";
@@ -535,7 +535,7 @@ export async function checkout(user: AuthUser, idOrRef: string, raw: z.input<typ
   }
 
   if (!integrations.stripe()) {
-    if (isProduction()) throw notConfigured("Payments are not configured.");
+    if (requiresIntegrations()) throw notConfigured("Payments are not configured.");
     await confirmOrder(order.id, { method: method === "CREDIT_AND_CARD" && cardPence < order.totalPence ? "CREDIT_AND_CARD" : "CARD", paymentIntentId: null });
     return { url: confirmation, paid: true };
   }
