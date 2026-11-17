@@ -8,7 +8,7 @@ import { getCurrentUser, requireUser } from "@/server/auth/session";
 import { PAYMENT_METHODS } from "@/server/domain";
 import { messageFor } from "@/server/http";
 import { listSlots } from "@/server/services/availability";
-import { checkDiscountCode, checkout, createOrder, quote } from "@/server/services/orders";
+import { cancelOrder, checkDiscountCode, checkout, createOrder, payWithTestCard, quote, testCardSchema } from "@/server/services/orders";
 
 import { parseAddons, parseQuantity } from "../services/selection";
 
@@ -90,6 +90,48 @@ export async function placeOrder(_prev: PlaceOrderState, formData: FormData): Pr
     return { error: messageFor(error, "We couldn’t start your payment. Please try again.") };
   }
   redirect(url);
+}
+
+export type TestPaymentState = { error?: string; fields?: Record<string, string> };
+
+/** Test card page "Pay": confirms the order and creates its project(s). */
+export async function payTestOrder(_prev: TestPaymentState, formData: FormData): Promise<TestPaymentState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const reference = String(formData.get("order") ?? "");
+  const card = {
+    cardName: String(formData.get("cardName") ?? ""),
+    cardNumber: String(formData.get("cardNumber") ?? ""),
+    expiry: String(formData.get("expiry") ?? ""),
+    cvc: String(formData.get("cvc") ?? ""),
+  };
+  const parsed = testCardSchema.safeParse(card);
+  if (!parsed.success) {
+    const fields: Record<string, string> = {};
+    for (const issue of parsed.error.issues) fields[String(issue.path[0])] ??= issue.message;
+    return { error: "Please check the card details.", fields };
+  }
+
+  let url: string;
+  try {
+    ({ url } = await payWithTestCard(user, reference, card));
+  } catch (error) {
+    return { error: messageFor(error, "The test payment didn’t go through. Please try again.") };
+  }
+  redirect(url);
+}
+
+/** Test card page "Cancel": cancels the unpaid order (returning any held credit) and goes back. */
+export async function cancelTestOrder(formData: FormData) {
+  const user = await requireUser();
+  const reference = String(formData.get("order") ?? "");
+  const back = String(formData.get("back") ?? "/services");
+  try {
+    await cancelOrder(user, reference);
+  } catch {
+    // Already paid or cancelled: just go back.
+  }
+  redirect(back.startsWith("/") && !back.startsWith("//") ? back : "/services");
 }
 
 /** Receipt "Apply": re-price with the code. Returns the new totals, or null when the code isn't valid. */

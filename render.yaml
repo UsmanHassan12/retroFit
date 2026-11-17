@@ -1,7 +1,7 @@
 # Render Blueprint: staging / client demo of the Retrofit Portal on the free plan.
 # Render → New → Blueprint → pick this repository. It creates the database and the web service.
 #
-# DEMO_MODE=true: card payments are simulated (no Stripe), uploads are stored on the server's
+# DEMO_MODE=true: card payments go to a test card page (4242 4242 4242 4242, no Stripe), uploads are stored on the server's
 # disk (they disappear on each redeploy), and emails are written to the logs (no SendGrid).
 # For the real production site, remove DEMO_MODE and add the Stripe, S3 and SendGrid variables.
 

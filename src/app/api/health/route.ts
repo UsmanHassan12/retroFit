@@ -1,5 +1,5 @@
 import { db } from "@/server/db";
-import { integrations } from "@/server/env";
+import { integrations, testPaymentsEnabled } from "@/server/env";
 import { handle, ok } from "@/server/http";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export const GET = handle(async () => {
       status: database === "ok" ? "ok" : "degraded",
       database,
       latencyMs: Date.now() - started,
-      integrations: { stripe: integrations.stripe(), s3: integrations.s3(), sendgrid: integrations.sendgrid() },
+      integrations: { stripe: integrations.stripe(), s3: integrations.s3(), sendgrid: integrations.sendgrid(), testPayments: testPaymentsEnabled() },
       time: new Date().toISOString(),
     },
     { status: database === "ok" ? 200 : 503 },

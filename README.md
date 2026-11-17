@@ -53,7 +53,7 @@ The weekly billing job (`/api/cron/billing`, protected by `CRON_SECRET`) should 
 
 ### Running without third-party keys
 
-- **Stripe** — leave `STRIPE_SECRET_KEY` empty in development and "Complete Purchase" marks the order paid immediately and creates the project. With keys, it redirects to Stripe Checkout and the webhook (`/api/webhooks/stripe`) creates the project. Locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe` and put the `whsec_…` into `STRIPE_WEBHOOK_SECRET`.
+- **Stripe** — leave `STRIPE_SECRET_KEY` empty in development (or set `DEMO_MODE=true` / `TEST_PAYMENTS=true` on a staging build) and "Complete Purchase" opens a built-in **test payment page** (`/checkout/test-payment`): card `4242 4242 4242 4242` with any future expiry and any 3-digit code pays the order and creates the project; `4000 0000 0000 0002` shows a declined payment. Nothing is charged. With keys, it redirects to Stripe Checkout and the webhook (`/api/webhooks/stripe`) creates the project. Locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe` and put the `whsec_…` into `STRIPE_WEBHOOK_SECRET`.
 - **S3** — leave `S3_BUCKET` empty and uploads are stored in `./.uploads` behind short-lived signed URLs (`/api/uploads/local`). Production requires S3.
 - **SendGrid** — leave `SENDGRID_API_KEY` empty and emails (reset links, invites, order confirmations) are printed in the terminal running `npm run dev`.
 

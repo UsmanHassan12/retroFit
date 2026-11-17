@@ -39,6 +39,16 @@ const schema = z.object({
     .optional()
     .transform((value) => value === "true" || value === "1"),
 
+  /**
+   * Test payments without Stripe on a production build, without the rest of demo mode
+   * (uploads and emails still need their integrations). Checkout shows a test card page.
+   * DEMO_MODE=true already includes this. Never set it on the real production site.
+   */
+  TEST_PAYMENTS: z
+    .string()
+    .optional()
+    .transform((value) => value === "true" || value === "1"),
+
   SENDGRID_API_KEY: optional,
   EMAIL_FROM: z.string().default("Retrofit Portal <no-reply@retrofitportal.co.uk>"),
 });
@@ -71,6 +81,12 @@ export const isDemo = () => env().DEMO_MODE;
 
 /** Production without demo mode: payment and storage integrations must be configured. */
 export const requiresIntegrations = () => isProduction() && !isDemo();
+
+/**
+ * Stripe isn't configured but payments are allowed to run in test mode: development,
+ * DEMO_MODE or TEST_PAYMENTS. Card checkout then goes to the built-in test card page.
+ */
+export const testPaymentsEnabled = () => !env().STRIPE_SECRET_KEY && (!isProduction() || isDemo() || env().TEST_PAYMENTS);
 
 export const integrations = {
   stripe: () => Boolean(env().STRIPE_SECRET_KEY),

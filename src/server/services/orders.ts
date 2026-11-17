@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { AuthUser } from "../auth/session";
 import { displayName } from "../auth/session";
 import { db } from "../db";
-import { appUrl, integrations, requiresIntegrations } from "../env";
+import { appUrl, integrations, testPaymentsEnabled } from "../env";
 import { AppError, badRequest, conflict, notConfigured, notFound } from "../errors";
 import { PAYMENT_METHODS, type CustomerTier, type PaymentMethod } from "../domain";
 import { sendTemplate } from "../integrations/email";
@@ -535,9 +535,11 @@ export async function checkout(user: AuthUser, idOrRef: string, raw: z.input<typ
   }
 
   if (!integrations.stripe()) {
-    if (requiresIntegrations()) throw notConfigured("Payments are not configured.");
-    await confirmOrder(order.id, { method: method === "CREDIT_AND_CARD" && cardPence < order.totalPence ? "CREDIT_AND_CARD" : "CARD", paymentIntentId: null });
-    return { url: confirmation, paid: true };
+    if (!testPaymentsEnabled()) throw notConfigured("Payments are not configured.");
+    // No Stripe: the customer "pays" on the built-in test card page, which confirms the order.
+    const cardMethod: PaymentMethod = method === "CREDIT_AND_CARD" && cardPence < order.totalPence ? "CREDIT_AND_CARD" : "CARD";
+    await db.order.update({ where: { id: order.id }, data: { status: "PENDING_PAYMENT", paymentMethod: cardMethod } });
+    return { url: appUrl(`/checkout/test-payment?order=${order.reference}`), paid: false };
   }
 
   const summary = order.lines.length === 1 ? order.lines[0]!.serviceTitle : `${order.lines.length} services`;
@@ -650,6 +652,60 @@ export async function confirmOrder(orderId: string, payment: { method: PaymentMe
     });
   }
   return result?.projects ?? [];
+}
+
+// ─── Test payments (no Stripe) ──────────────────────────────────────────────
+
+/** Test cards, following Stripe's own test numbers so the habit carries over. */
+export const TEST_CARDS = {
+  success: "4242424242424242",
+  declined: "4000000000000002",
+} as const;
+
+export const testCardSchema = z.object({
+  cardName: z.string().trim().min(2, "Enter the name on the card.").max(80),
+  cardNumber: z
+    .string()
+    .transform((value) => value.replace(/[\s-]/g, ""))
+    .pipe(z.string().regex(/^\d{16}$/, "Enter a 16-digit card number.")),
+  expiry: z
+    .string()
+    .trim()
+    .regex(/^(0[1-9]|1[0-2])\s*\/\s*\d{2}$/, "Use MM/YY.")
+    .refine((value) => {
+      const [month, year] = value.split("/").map((part) => Number(part.trim()));
+      return new Date(2000 + year!, month!, 1) > new Date();
+    }, "This card has expired."),
+  cvc: z.string().trim().regex(/^\d{3,4}$/, "Enter the 3-digit security code."),
+});
+
+/** Order waiting on the test card page, for that page. Null when it isn't (or is no longer) payable there. */
+export async function getTestPayment(user: Pick<AuthUser, "id">, reference: string) {
+  const order = await db.order.findFirst({ where: { userId: user.id, reference }, include: orderInclude });
+  if (!order) return null;
+  const dto = toOrderDto(order);
+  return { order: dto, cardPence: dto.breakdown.totalPence - dto.breakdown.creditAppliedPence, enabled: testPaymentsEnabled() };
+}
+
+/**
+ * Pay a PENDING_PAYMENT order with a test card (only when Stripe isn't configured and test
+ * payments are allowed). 4242 4242 4242 4242 succeeds and starts the project(s);
+ * 4000 0000 0000 0002 is declined so the failure path can be shown too.
+ */
+export async function payWithTestCard(user: AuthUser, idOrRef: string, raw: z.input<typeof testCardSchema>) {
+  if (!testPaymentsEnabled()) throw notConfigured("Test payments are turned off. Use the normal card checkout.");
+  const card = testCardSchema.parse(raw);
+  const order = await ownOrder(user, idOrRef);
+  const confirmation = appUrl(`/checkout/confirmation?order=${order.reference}`);
+  if (order.status === "CONFIRMED") return { url: confirmation, paid: true };
+  if (order.status !== "PENDING_PAYMENT" || order.stripeSessionId) throw conflict("This order isn’t waiting for a test payment. Please start the order again.");
+
+  if (card.cardNumber === TEST_CARDS.declined) throw new AppError("PAYMENT_REQUIRED", "Your card was declined (test card 4000 0000 0000 0002). Try 4242 4242 4242 4242.");
+  if (card.cardNumber !== TEST_CARDS.success) throw badRequest("This is a test checkout. Use card 4242 4242 4242 4242, any future expiry date and any 3-digit code.");
+
+  const method: PaymentMethod = order.paymentMethod === "CREDIT_AND_CARD" ? "CREDIT_AND_CARD" : "CARD";
+  await confirmOrder(order.id, { method, paymentIntentId: `test_${crypto.randomUUID()}` });
+  return { url: confirmation, paid: true };
 }
 
 /** Webhook: Stripe refunded a payment. */
