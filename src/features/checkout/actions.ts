@@ -125,13 +125,13 @@ export async function payTestOrder(_prev: TestPaymentState, formData: FormData):
 export async function cancelTestOrder(formData: FormData) {
   const user = await requireUser();
   const reference = String(formData.get("order") ?? "");
-  const back = String(formData.get("back") ?? "/services");
+  const back = String(formData.get("back") ?? "/dashboard/services");
   try {
     await cancelOrder(user, reference);
   } catch {
     // Already paid or cancelled: just go back.
   }
-  redirect(back.startsWith("/") && !back.startsWith("//") ? back : "/services");
+  redirect(back.startsWith("/") && !back.startsWith("//") ? back : "/dashboard/services");
 }
 
 /** Receipt "Apply": re-price with the code. Returns the new totals, or null when the code isn't valid. */

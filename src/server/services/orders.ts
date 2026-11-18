@@ -494,7 +494,7 @@ export async function cancelOrder(user: Pick<AuthUser, "id">, idOrRef: string) {
 export async function checkout(user: AuthUser, idOrRef: string, raw: z.input<typeof checkoutSchema> = {}) {
   const { method: requested } = checkoutSchema.parse(raw);
   const order = await ownOrder(user, idOrRef);
-  const confirmation = appUrl(`/checkout/confirmation?order=${order.reference}`);
+  const confirmation = appUrl(`/dashboard/checkout/confirmation?order=${order.reference}`);
   if (order.status === "CONFIRMED") return { url: confirmation, paid: true };
   if (order.status !== "DRAFT" && order.status !== "PENDING_PAYMENT") throw conflict("This order can no longer be paid.");
   if (order.status === "PENDING_PAYMENT" && order.creditAppliedPence > 0) throw conflict("This order is waiting for the card payment to finish.");
@@ -539,7 +539,7 @@ export async function checkout(user: AuthUser, idOrRef: string, raw: z.input<typ
     // No Stripe: the customer "pays" on the built-in test card page, which confirms the order.
     const cardMethod: PaymentMethod = method === "CREDIT_AND_CARD" && cardPence < order.totalPence ? "CREDIT_AND_CARD" : "CARD";
     await db.order.update({ where: { id: order.id }, data: { status: "PENDING_PAYMENT", paymentMethod: cardMethod } });
-    return { url: appUrl(`/checkout/test-payment?order=${order.reference}`), paid: false };
+    return { url: appUrl(`/dashboard/checkout/test-payment?order=${order.reference}`), paid: false };
   }
 
   const summary = order.lines.length === 1 ? order.lines[0]!.serviceTitle : `${order.lines.length} services`;
@@ -563,7 +563,7 @@ export async function checkout(user: AuthUser, idOrRef: string, raw: z.input<typ
       },
     ],
     success_url: confirmation,
-    cancel_url: appUrl(`/checkout/${order.lines[0]?.service?.slug ?? ""}/payment?order=${order.reference}&cancelled=1`),
+    cancel_url: appUrl(`/dashboard/checkout/${order.lines[0]?.service?.slug ?? ""}/payment?order=${order.reference}&cancelled=1`),
   });
   await db.order.update({ where: { id: order.id }, data: { status: "PENDING_PAYMENT", stripeSessionId: session.id, paymentMethod: method } });
   return { url: session.url!, paid: false };
@@ -696,7 +696,7 @@ export async function payWithTestCard(user: AuthUser, idOrRef: string, raw: z.in
   if (!testPaymentsEnabled()) throw notConfigured("Test payments are turned off. Use the normal card checkout.");
   const card = testCardSchema.parse(raw);
   const order = await ownOrder(user, idOrRef);
-  const confirmation = appUrl(`/checkout/confirmation?order=${order.reference}`);
+  const confirmation = appUrl(`/dashboard/checkout/confirmation?order=${order.reference}`);
   if (order.status === "CONFIRMED") return { url: confirmation, paid: true };
   if (order.status !== "PENDING_PAYMENT" || order.stripeSessionId) throw conflict("This order isn’t waiting for a test payment. Please start the order again.");
 

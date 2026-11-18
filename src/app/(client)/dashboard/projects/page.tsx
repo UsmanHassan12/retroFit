@@ -63,7 +63,7 @@ export default async function ProjectsPage({
             );
           })}
         </nav>
-        <ButtonLink href="/services" size="lg" className="text-sm">
+        <ButtonLink href="/dashboard/services" size="lg" className="text-sm">
           <Plus aria-hidden />
           New Project
         </ButtonLink>

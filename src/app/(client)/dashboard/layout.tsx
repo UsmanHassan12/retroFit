@@ -20,7 +20,7 @@ export default async function ClientDashboardLayout({ children }: { children: Re
   return (
     <DashboardFrame
       nav={clientNav}
-      cta={{ label: "New Project", href: "/services" }}
+      cta={{ label: "New Project", href: "/dashboard/services" }}
       topbar={
         <Topbar
           user={{ name: session.name, avatar: session.avatarUrl ?? undefined }}

@@ -8,7 +8,16 @@ import { formatPrice } from "@/lib/format";
 import { startingPrice } from "../queries";
 import type { Service } from "../types";
 
-export function ServiceCard({ service, priority = false }: { service: Service; priority?: boolean }) {
+export function ServiceCard({
+  service,
+  priority = false,
+  basePath = "/services",
+}: {
+  service: Service;
+  priority?: boolean;
+  /** Where the detail page lives: the public site, or /dashboard/services for signed-in clients. */
+  basePath?: string;
+}) {
   return (
     <article className="group flex h-full flex-col p-6 transition-colors hover:bg-white/70">
       <div className="relative aspect-[314/236] overflow-hidden rounded-md">
@@ -56,7 +65,7 @@ export function ServiceCard({ service, priority = false }: { service: Service; p
       </div>
 
       <ButtonLink
-        href={`/services/${service.slug}`}
+        href={`${basePath}/${service.slug}`}
         className="mt-6"
         fullWidth
         aria-label={`View details for ${service.title}`}

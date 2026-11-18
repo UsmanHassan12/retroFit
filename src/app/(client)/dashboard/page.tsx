@@ -47,7 +47,7 @@ export default async function ClientDashboardPage() {
           <div className="mt-6 rounded-2xl bg-white p-8 text-center shadow-card">
             <p className="text-lg font-medium text-navy">No active projects yet</p>
             <p className="mt-2 text-muted">Choose a retrofit service to get started. Your project appears here as soon as it’s paid.</p>
-            <ButtonLink href="/services" size="lg" className="mt-6">
+            <ButtonLink href="/dashboard/services" size="lg" className="mt-6">
               Browse services
             </ButtonLink>
           </div>

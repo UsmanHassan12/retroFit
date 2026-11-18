@@ -18,7 +18,16 @@ export type BuyerPricing = { signedIn: boolean; tier: "BASIC" | "PARTNER"; disco
  * One list price per unit; the visitor's tier decides the discount and turnaround.
  * The estimate here is for display only: the server prices the order again at checkout.
  */
-export function PricingPanel({ service, buyer }: { service: Service; buyer: BuyerPricing }) {
+export function PricingPanel({
+  service,
+  buyer,
+  checkoutBase = "/checkout",
+}: {
+  service: Service;
+  buyer: BuyerPricing;
+  /** Checkout route prefix. Signed-in clients check out inside the dashboard. */
+  checkoutBase?: string;
+}) {
   const baseId = useId();
   const { pricing } = service;
   const [quantity, setQuantity] = useState(1);
@@ -51,7 +60,7 @@ export function PricingPanel({ service, buyer }: { service: Service; buyer: Buye
   if (pricing.perUnit && quantity > 1) params.set("qty", String(quantity));
   const addons = addonQuery(selected);
   if (addons) params.set("addons", addons);
-  const checkoutHref = `/checkout/${service.slug}${params.size ? `?${params.toString()}` : ""}`;
+  const checkoutHref = `${checkoutBase}/${service.slug}${params.size ? `?${params.toString()}` : ""}`;
 
   const toggle = (id: string, value: number) => setSelected((current) => ({ ...current, [id]: value }));
   const unitPrice = pricing.listPrice * (1 - buyer.discountPercent / 100);
